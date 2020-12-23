@@ -1,4 +1,4 @@
-use miniserde::json;
+use miniserde_ditto::json;
 use std::f64;
 
 #[test]

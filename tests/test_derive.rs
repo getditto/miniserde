@@ -1,4 +1,4 @@
-use miniserde::{json, Deserialize, Serialize};
+use miniserde_ditto::{json, Deserialize, Serialize};
 
 #[derive(PartialEq, Debug, Serialize, Deserialize)]
 enum Tag {

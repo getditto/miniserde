@@ -37,15 +37,15 @@ fn derive_struct(input: &DeriveInput, fields: &FieldsNamed) -> Result<TokenStrea
 
     let wrapper_generics = bound::with_lifetime_bound(&input.generics, "'__a");
     let (wrapper_impl_generics, wrapper_ty_generics, _) = wrapper_generics.split_for_impl();
-    let bound = parse_quote!(miniserde::Serialize);
+    let bound = parse_quote!(miniserde_ditto::Serialize);
     let bounded_where_clause = bound::where_clause_with_bound(&input.generics, bound);
 
     Ok(quote! {
         #[allow(non_upper_case_globals)]
         const #dummy: () = {
-            impl #impl_generics miniserde::Serialize for #ident #ty_generics #bounded_where_clause {
-                fn begin(&self) -> miniserde::ser::Fragment {
-                    miniserde::ser::Fragment::Map(miniserde::__private::Box::new(__Map {
+            impl #impl_generics miniserde_ditto::Serialize for #ident #ty_generics #bounded_where_clause {
+                fn begin(&self) -> miniserde_ditto::ser::Fragment {
+                    miniserde_ditto::ser::Fragment::Map(miniserde_ditto::__private::Box::new(__Map {
                         data: self,
                         state: 0,
                     }))
@@ -54,21 +54,21 @@ fn derive_struct(input: &DeriveInput, fields: &FieldsNamed) -> Result<TokenStrea
 
             struct __Map #wrapper_impl_generics #where_clause {
                 data: &'__a #ident #ty_generics,
-                state: miniserde::__private::usize,
+                state: miniserde_ditto::__private::usize,
             }
 
-            impl #wrapper_impl_generics miniserde::ser::Map for __Map #wrapper_ty_generics #bounded_where_clause {
-                fn next(&mut self) -> miniserde::__private::Option<(miniserde::__private::Cow<miniserde::__private::str>, &dyn miniserde::Serialize)> {
+            impl #wrapper_impl_generics miniserde_ditto::ser::Map for __Map #wrapper_ty_generics #bounded_where_clause {
+                fn next(&mut self) -> miniserde_ditto::__private::Option<(miniserde_ditto::__private::Cow<miniserde_ditto::__private::str>, &dyn miniserde_ditto::Serialize)> {
                     let __state = self.state;
                     self.state = __state + 1;
                     match __state {
                         #(
-                            #index => miniserde::__private::Some((
-                                miniserde::__private::Cow::Borrowed(#fieldstr),
+                            #index => miniserde_ditto::__private::Some((
+                                miniserde_ditto::__private::Cow::Borrowed(#fieldstr),
                                 &self.data.#fieldname,
                             )),
                         )*
-                        _ => miniserde::__private::None,
+                        _ => miniserde_ditto::__private::None,
                     }
                 }
             }
@@ -110,12 +110,12 @@ fn derive_enum(input: &DeriveInput, enumeration: &DataEnum) -> Result<TokenStrea
     Ok(quote! {
         #[allow(non_upper_case_globals)]
         const #dummy: () = {
-            impl miniserde::Serialize for #ident {
-                fn begin(&self) -> miniserde::ser::Fragment {
+            impl miniserde_ditto::Serialize for #ident {
+                fn begin(&self) -> miniserde_ditto::ser::Fragment {
                     match self {
                         #(
                             #ident::#var_idents => {
-                                miniserde::ser::Fragment::Str(miniserde::__private::Cow::Borrowed(#names))
+                                miniserde_ditto::ser::Fragment::Str(miniserde_ditto::__private::Cow::Borrowed(#names))
                             }
                         )*
                     }
