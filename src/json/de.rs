@@ -385,7 +385,7 @@ impl<'a, 'b> Deserializer<'a, 'b> {
         Ok(())
     }
 
-    fn parse_integer(&mut self, nonnegative: bool, first_digit: u8) -> Result<Event> {
+    fn parse_integer(&mut self, nonnegative: bool, first_digit: u8) -> Result<Event<'_>> {
         match first_digit {
             b'0' => {
                 // There can be only one leading '0'.
@@ -455,7 +455,7 @@ impl<'a, 'b> Deserializer<'a, 'b> {
         }
     }
 
-    fn parse_number(&mut self, nonnegative: bool, significand: u64) -> Result<Event> {
+    fn parse_number(&mut self, nonnegative: bool, significand: u64) -> Result<Event<'_>> {
         match self.peek_or_nul() {
             b'.' => self.parse_decimal(nonnegative, significand, 0).map(Float),
             b'e' | b'E' => self.parse_exponent(nonnegative, significand, 0).map(Float),
@@ -582,7 +582,7 @@ impl<'a, 'b> Deserializer<'a, 'b> {
         Ok(if nonnegative { 0.0 } else { -0.0 })
     }
 
-    fn event(&mut self) -> Result<Event> {
+    fn event(&mut self) -> Result<Event<'_>> {
         let peek = match self.parse_whitespace() {
             Some(b) => b,
             None => return Err(Error),

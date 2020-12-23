@@ -156,6 +156,8 @@
     clippy::single_match_else,
     clippy::too_many_lines,
 )]
+#![deny(rust_2018_idioms)]
+#![allow(explicit_outlives_requirements)]
 
 #[doc(hidden)]
 pub use ::derives::*;
