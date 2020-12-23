@@ -6,7 +6,7 @@
 //! ## Serializing a primitive
 //!
 //! ```rust
-//! use miniserde::ser::{ValueView, Serialize};
+//! use miniserde_ditto::ser::{ValueView, Serialize};
 //!
 //! // The data structure that we want to serialize as a primitive.
 //! struct MyBoolean(bool);
@@ -21,7 +21,7 @@
 //! ## Serializing a sequence
 //!
 //! ```rust
-//! use miniserde::ser::{ValueView, Seq, Serialize};
+//! use miniserde_ditto::ser::{ValueView, Seq, Serialize};
 //!
 //! // Some custom sequence type that we want to serialize.
 //! struct MyVec<T>(Vec<T>);
@@ -36,8 +36,8 @@
 //!     iter: std::slice::Iter<'a, T>,
 //! }
 //!
-//! impl<'a, T: Serialize> Seq for SliceStream<'a, T> {
-//!     fn next(&mut self) -> Option<&dyn Serialize> {
+//! impl<'a, T: Serialize> Seq<'a> for SliceStream<'a, T> {
+//!     fn next(&mut self) -> Option<&'a dyn Serialize> {
 //!         let element = self.iter.next()?;
 //!         Some(element)
 //!     }
@@ -50,7 +50,7 @@
 //! `#[derive(Serialize)]`.
 //!
 //! ```rust
-//! use miniserde::ser::{ValueView, Map, Serialize};
+//! use miniserde_ditto::ser::{ValueView, Map, Serialize};
 //! use std::borrow::Cow;
 //!
 //! // The struct that we would like to serialize.
@@ -73,8 +73,8 @@
 //!     state: usize,
 //! }
 //!
-//! impl<'a> Map for DemoStream<'a> {
-//!     fn next(&mut self) -> Option<(Cow<str>, &dyn Serialize)> {
+//! impl<'a> Map<'a> for DemoStream<'a> {
+//!     fn next(&mut self) -> Option<(Cow<'a, str>, &'a dyn Serialize)> {
 //!         let state = self.state;
 //!         self.state += 1;
 //!         match state {
