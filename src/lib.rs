@@ -144,6 +144,8 @@
     // We support older compilers.
     clippy::manual_range_contains,
 )]
+#![deny(rust_2018_idioms)]
+#![allow(explicit_outlives_requirements)]
 
 #[doc(hidden)]
 pub use ::derives::*;

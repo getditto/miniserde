@@ -108,7 +108,7 @@ pub enum ValueView<'a> {
 ///
 /// [Refer to the module documentation for examples.][::ser]
 pub trait Serialize {
-    fn begin(&self) -> ValueView;
+    fn begin(&self) -> ValueView<'_>;
 }
 
 /// Trait that can iterate elements of a sequence.
@@ -122,5 +122,5 @@ pub trait Seq {
 ///
 /// [Refer to the module documentation for examples.][::ser]
 pub trait Map {
-    fn next(&mut self) -> Option<(Cow<str>, &dyn Serialize)>;
+    fn next(&mut self) -> Option<(Cow<'_, str>, &dyn Serialize)>;
 }
