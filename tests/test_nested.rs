@@ -1,4 +1,4 @@
-use miniserde::json::{self, Value};
+use miniserde_ditto::json::{self, Value};
 
 #[test]
 fn test_round_trip_deeply_nested() {
