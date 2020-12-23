@@ -24,8 +24,8 @@
 //! type.
 //!
 //! ```rust
-//! use miniserde::{make_place, Result};
-//! use miniserde::de::{Deserialize, Visitor};
+//! use miniserde_ditto::{make_place, Result};
+//! use miniserde_ditto::de::{Deserialize, Visitor};
 //!
 //! make_place!(Place);
 //!
@@ -59,8 +59,8 @@
 //! that can hand out places to write sequence elements one element at a time.
 //!
 //! ```rust
-//! use miniserde::{make_place, Result};
-//! use miniserde::de::{Deserialize, Seq, Visitor};
+//! use miniserde_ditto::{make_place, Result};
+//! use miniserde_ditto::de::{Deserialize, Seq, Visitor};
 //! use std::mem;
 //!
 //! make_place!(Place);
@@ -96,10 +96,10 @@
 //!     }
 //!
 //!     fn finish(self: Box<Self>) -> Result<()> {
+//!         let mut vec = self.vec;
 //!         // Transfer the last element.
-//!         self.vec.extend(self.element.take());
+//!         vec.extend(self.element);
 //!         // Move the output object into self.out.
-//!         let vec = mem::replace(&mut self.vec, Vec::new());
 //!         *self.out = Some(MyVec(vec));
 //!         Ok(())
 //!     }
@@ -119,8 +119,8 @@
 //! `#[derive(Deserialize)]`.
 //!
 //! ```rust
-//! use miniserde::{make_place, Result};
-//! use miniserde::de::{Deserialize, Map, Visitor};
+//! use miniserde_ditto::{make_place, Result};
+//! use miniserde_ditto::de::{Deserialize, Map, Visitor};
 //!
 //! make_place!(Place);
 //!
@@ -167,8 +167,8 @@
 //!     fn finish(self: Box<Self>) -> Result<()> {
 //!         // Make sure we have every field and then write the output object
 //!         // into self.out.
-//!         let code = self.code.take().ok_or(miniserde::Error)?;
-//!         let message = self.message.take().ok_or(miniserde::Error)?;
+//!         let code = self.code.ok_or(miniserde_ditto::Error)?;
+//!         let message = self.message.ok_or(miniserde_ditto::Error)?;
 //!         *self.out = Some(Demo { code, message });
 //!         Ok(())
 //!     }
@@ -193,8 +193,8 @@ pub trait Deserialize: Sized {
     /// The only correct implementation of this method is:
     ///
     /// ```rust
-    /// # use miniserde::make_place;
-    /// # use miniserde::de::{Deserialize, Visitor};
+    /// # use miniserde_ditto::make_place;
+    /// # use miniserde_ditto::de::{Deserialize, Visitor};
     /// #
     /// # make_place!(Place);
     /// # struct S;
