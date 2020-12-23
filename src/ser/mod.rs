@@ -92,7 +92,7 @@ use std::borrow::Cow;
 
 /// One unit of output produced during serialization.
 ///
-/// [Refer to the module documentation for examples.][::ser]
+/// [Refer to the module documentation for examples.][crate::ser]
 pub enum ValueView<'a> {
     Null,
     Bool(bool),
@@ -106,21 +106,21 @@ pub enum ValueView<'a> {
 
 /// Trait for data structures that can be serialized to a JSON string.
 ///
-/// [Refer to the module documentation for examples.][::ser]
+/// [Refer to the module documentation for examples.][crate::ser]
 pub trait Serialize {
     fn begin(&self) -> ValueView<'_>;
 }
 
 /// Trait that can iterate elements of a sequence.
 ///
-/// [Refer to the module documentation for examples.][::ser]
+/// [Refer to the module documentation for examples.][crate::ser]
 pub trait Seq<'view> {
     fn next(&mut self) -> Option<&'view dyn Serialize>;
 }
 
 /// Trait that can iterate key-value entries of a map or struct.
 ///
-/// [Refer to the module documentation for examples.][::ser]
+/// [Refer to the module documentation for examples.][crate::ser]
 pub trait Map<'view> {
     fn next(&mut self) -> Option<(Cow<'view, str>, &'view dyn Serialize)>;
 }
