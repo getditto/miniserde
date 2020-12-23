@@ -79,7 +79,7 @@ fn to_string_impl(value: &dyn Serialize) -> String {
             ValueView::Map(mut map) => {
                 out.push('{');
                 // invariant: `map` must outlive `first`
-                match careful!(map.next() as Option<(Cow<str>, &dyn Serialize)>) {
+                match careful!(map.next() as Option<(Cow<'_, str>, &dyn Serialize)>) {
                     Some((key, first)) => {
                         escape_str(&key, &mut out);
                         out.push(':');
@@ -107,7 +107,7 @@ fn to_string_impl(value: &dyn Serialize) -> String {
                 }
                 Some(Layer::Map(map)) => {
                     // invariant: `map` must outlive `next`
-                    match careful!(map.next() as Option<(Cow<str>, &dyn Serialize)>) {
+                    match careful!(map.next() as Option<(Cow<'_, str>, &dyn Serialize)>) {
                         Some((key, next)) => {
                             out.push(',');
                             escape_str(&key, &mut out);

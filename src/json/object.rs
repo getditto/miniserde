@@ -89,11 +89,11 @@ impl FromIterator<(String, Value)> for Object {
 }
 
 impl private {
-    pub fn stream_object(object: &Object) -> ValueView {
+    pub fn stream_object(object: &Object) -> ValueView<'_> {
         struct ObjectIter<'a>(btree_map::Iter<'a, String, Value>);
 
         impl<'a> ser::Map for ObjectIter<'a> {
-            fn next(&mut self) -> Option<(Cow<str>, &dyn Serialize)> {
+            fn next(&mut self) -> Option<(Cow<'_, str>, &dyn Serialize)> {
                 let (k, v) = self.0.next()?;
                 Some((Cow::Borrowed(k), v as &dyn Serialize))
             }

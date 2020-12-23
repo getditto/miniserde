@@ -11,7 +11,7 @@ pub struct Error;
 pub type Result<T> = std::result::Result<T, Error>;
 
 impl Display for Error {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str("miniserde error")
     }
 }
