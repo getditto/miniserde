@@ -17,7 +17,7 @@
 //! # Example
 //!
 //! ```rust
-//! use miniserde::{json, Serialize, Deserialize};
+//! use miniserde_ditto::{json, Serialize, Deserialize};
 //!
 //! #[derive(Serialize, Deserialize, Debug)]
 //! struct Example {
@@ -25,7 +25,7 @@
 //!     message: String,
 //! }
 //!
-//! fn main() -> miniserde::Result<()> {
+//! fn main() -> miniserde_ditto::Result<()> {
 //!     let example = Example {
 //!         code: 200,
 //!         message: "reminiscent of Serde".to_owned(),

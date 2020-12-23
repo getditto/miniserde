@@ -3,7 +3,7 @@ use crate::ser::{ValueView, Map, Seq, Serialize};
 /// Serialize any serializable type into a JSON string.
 ///
 /// ```rust
-/// use miniserde::{json, Serialize};
+/// use miniserde_ditto::{json, Serialize};
 ///
 /// #[derive(Serialize, Debug)]
 /// struct Example {
