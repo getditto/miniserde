@@ -107,8 +107,8 @@ impl<A: Serialize, B: Serialize> Serialize for (A, B) {
             state: usize,
         }
 
-        impl<'a> Seq for TupleStream<'a> {
-            fn next(&mut self) -> Option<&dyn Serialize> {
+        impl<'a> Seq<'a> for TupleStream<'a> {
+            fn next(&mut self) -> Option<&'a dyn Serialize> {
                 let state = self.state;
                 self.state += 1;
                 match state {
@@ -148,8 +148,8 @@ where
     fn begin(&self) -> ValueView<'_> {
         struct HashMapStream<'a, K: 'a, V: 'a>(hash_map::Iter<'a, K, V>);
 
-        impl<'a, K: ToString, V: Serialize> Map for HashMapStream<'a, K, V> {
-            fn next(&mut self) -> Option<(Cow<'_, str>, &dyn Serialize)> {
+        impl<'a, K: ToString, V: Serialize> Map<'a> for HashMapStream<'a, K, V> {
+            fn next(&mut self) -> Option<(Cow<'a, str>, &'a dyn Serialize)> {
                 let (k, v) = self.0.next()?;
                 Some((Cow::Owned(k.to_string()), v as &dyn Serialize))
             }
@@ -169,8 +169,8 @@ impl private {
     pub fn stream_slice<T: Serialize>(slice: &[T]) -> ValueView<'_> {
         struct SliceStream<'a, T: 'a>(slice::Iter<'a, T>);
 
-        impl<'a, T: Serialize> Seq for SliceStream<'a, T> {
-            fn next(&mut self) -> Option<&dyn Serialize> {
+        impl<'a, T: Serialize> Seq<'a> for SliceStream<'a, T> {
+            fn next(&mut self) -> Option<&'a dyn Serialize> {
                 let element = self.0.next()?;
                 Some(element)
             }
@@ -182,8 +182,8 @@ impl private {
     pub fn stream_btree_map<K: ToString, V: Serialize>(map: &BTreeMap<K, V>) -> ValueView<'_> {
         struct BTreeMapStream<'a, K: 'a, V: 'a>(btree_map::Iter<'a, K, V>);
 
-        impl<'a, K: ToString, V: Serialize> Map for BTreeMapStream<'a, K, V> {
-            fn next(&mut self) -> Option<(Cow<'_, str>, &dyn Serialize)> {
+        impl<'a, K: ToString, V: Serialize> Map<'a> for BTreeMapStream<'a, K, V> {
+            fn next(&mut self) -> Option<(Cow<'a, str>, &'a dyn Serialize)> {
                 let (k, v) = self.0.next()?;
                 Some((Cow::Owned(k.to_string()), v as &dyn Serialize))
             }
