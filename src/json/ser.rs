@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 use crate::ser::{ValueView, Map, Seq, Serialize};
 
 /// Serialize any serializable type into a JSON string.
@@ -67,7 +65,7 @@ fn to_string_impl(value: &dyn Serialize) -> String {
             ValueView::Seq(mut seq) => {
                 out.push('[');
                 // invariant: `seq` must outlive `first`
-                match careful!(seq.next() as Option<&dyn Serialize>) {
+                match seq.next() {
                     Some(first) => {
                         serializer.stack.push(Layer::Seq(seq));
                         fragment = first.begin();
@@ -79,7 +77,7 @@ fn to_string_impl(value: &dyn Serialize) -> String {
             ValueView::Map(mut map) => {
                 out.push('{');
                 // invariant: `map` must outlive `first`
-                match careful!(map.next() as Option<(Cow<'_, str>, &dyn Serialize)>) {
+                match map.next() {
                     Some((key, first)) => {
                         escape_str(&key, &mut out);
                         out.push(':');
@@ -96,7 +94,7 @@ fn to_string_impl(value: &dyn Serialize) -> String {
             match serializer.stack.last_mut() {
                 Some(Layer::Seq(seq)) => {
                     // invariant: `seq` must outlive `next`
-                    match careful!(seq.next() as Option<&dyn Serialize>) {
+                    match seq.next() {
                         Some(next) => {
                             out.push(',');
                             fragment = next.begin();
@@ -107,7 +105,7 @@ fn to_string_impl(value: &dyn Serialize) -> String {
                 }
                 Some(Layer::Map(map)) => {
                     // invariant: `map` must outlive `next`
-                    match careful!(map.next() as Option<(Cow<'_, str>, &dyn Serialize)>) {
+                    match map.next() {
                         Some((key, next)) => {
                             out.push(',');
                             escape_str(&key, &mut out);
