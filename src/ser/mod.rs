@@ -6,14 +6,14 @@
 //! ## Serializing a primitive
 //!
 //! ```rust
-//! use miniserde::ser::{Fragment, Serialize};
+//! use miniserde::ser::{ValueView, Serialize};
 //!
 //! // The data structure that we want to serialize as a primitive.
 //! struct MyBoolean(bool);
 //!
 //! impl Serialize for MyBoolean {
-//!     fn begin(&self) -> Fragment {
-//!         Fragment::Bool(self.0)
+//!     fn view(&self) -> ValueView {
+//!         ValueView::Bool(self.0)
 //!     }
 //! }
 //! ```
@@ -21,14 +21,14 @@
 //! ## Serializing a sequence
 //!
 //! ```rust
-//! use miniserde::ser::{Fragment, Seq, Serialize};
+//! use miniserde::ser::{ValueView, Seq, Serialize};
 //!
 //! // Some custom sequence type that we want to serialize.
 //! struct MyVec<T>(Vec<T>);
 //!
 //! impl<T: Serialize> Serialize for MyVec<T> {
-//!     fn begin(&self) -> Fragment {
-//!         Fragment::Seq(Box::new(SliceStream { iter: self.0.iter() }))
+//!     fn view(&self) -> ValueView {
+//!         ValueView::Seq(Box::new(SliceStream { iter: self.0.iter() }))
 //!     }
 //! }
 //!
@@ -38,8 +38,8 @@
 //!
 //! impl<'a, T: Serialize> Seq for SliceStream<'a, T> {
 //!     fn next(&mut self) -> Option<&dyn Serialize> {
-//!         let element = self.iter.next()?;
-//!         Some(element)
+//!         let next_slot = self.iter.next()?;
+//!         Some(next_slot)
 //!     }
 //! }
 //! ```
@@ -50,7 +50,7 @@
 //! `#[derive(Serialize)]`.
 //!
 //! ```rust
-//! use miniserde::ser::{Fragment, Map, Serialize};
+//! use miniserde::ser::{ValueView, Map, Serialize};
 //! use std::borrow::Cow;
 //!
 //! // The struct that we would like to serialize.
@@ -60,8 +60,8 @@
 //! }
 //!
 //! impl Serialize for Demo {
-//!     fn begin(&self) -> Fragment {
-//!         Fragment::Map(Box::new(DemoStream {
+//!     fn view(&self) -> ValueView {
+//!         ValueView::Map(Box::new(DemoStream {
 //!             data: self,
 //!             state: 0,
 //!         }))
@@ -92,35 +92,34 @@ use std::borrow::Cow;
 
 /// One unit of output produced during serialization.
 ///
-/// [Refer to the module documentation for examples.][::ser]
-pub enum Fragment<'a> {
+/// [Refer to the module documentation for examples.][crate::ser]
+pub enum ValueView<'view> {
     Null,
     Bool(bool),
-    Str(Cow<'a, str>),
-    U64(u64),
-    I64(i64),
-    F64(f64),
-    Seq(Box<dyn Seq + 'a>),
-    Map(Box<dyn Map + 'a>),
+    Str(Cow<'view, str>),
+    Int(i128),
+    Float(f64),
+    Seq(Box<dyn Seq<'view>>),
+    Map(Box<dyn Map<'view>>),
 }
 
 /// Trait for data structures that can be serialized to a JSON string.
 ///
-/// [Refer to the module documentation for examples.][::ser]
+/// [Refer to the module documentation for examples.][crate::ser]
 pub trait Serialize {
-    fn begin(&self) -> Fragment;
+    fn view(&self) -> ValueView<'_>;
 }
 
-/// Trait that can iterate elements of a sequence.
+/// Trait that can iterate next_slots of a sequence.
 ///
-/// [Refer to the module documentation for examples.][::ser]
-pub trait Seq {
-    fn next(&mut self) -> Option<&dyn Serialize>;
+/// [Refer to the module documentation for examples.][crate::ser]
+pub trait Seq<'view> {
+    fn next(&mut self) -> Option<&'view dyn Serialize>;
 }
 
-/// Trait that can iterate key-value entries of a map or struct.
+/// Trait that can iterate slot_at-value entries of a map or struct.
 ///
-/// [Refer to the module documentation for examples.][::ser]
-pub trait Map {
-    fn next(&mut self) -> Option<(Cow<str>, &dyn Serialize)>;
+/// [Refer to the module documentation for examples.][crate::ser]
+pub trait Map<'view> {
+    fn next(&mut self) -> Option<(Cow<'view, str>, &'view dyn Serialize)>;
 }

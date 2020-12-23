@@ -44,8 +44,8 @@ fn derive_struct(input: &DeriveInput, fields: &FieldsNamed) -> Result<TokenStrea
         #[allow(non_upper_case_globals)]
         const #dummy: () = {
             impl #impl_generics miniserde::Serialize for #ident #ty_generics #bounded_where_clause {
-                fn begin(&self) -> miniserde::ser::Fragment {
-                    miniserde::ser::Fragment::Map(miniserde::export::Box::new(__Map {
+                fn view(&self) -> miniserde::ser::ValueView {
+                    miniserde::ser::ValueView::Map(miniserde::export::Box::new(__Map {
                         data: self,
                         state: 0,
                     }))
@@ -111,11 +111,11 @@ fn derive_enum(input: &DeriveInput, enumeration: &DataEnum) -> Result<TokenStrea
         #[allow(non_upper_case_globals)]
         const #dummy: () = {
             impl miniserde::Serialize for #ident {
-                fn begin(&self) -> miniserde::ser::Fragment {
+                fn view(&self) -> miniserde::ser::ValueView {
                     match self {
                         #(
                             #ident::#var_idents => {
-                                miniserde::ser::Fragment::Str(miniserde::export::Cow::Borrowed(#names))
+                                miniserde::ser::ValueView::Str(miniserde::export::Cow::Borrowed(#names))
                             }
                         )*
                     }

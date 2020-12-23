@@ -49,7 +49,7 @@ pub fn derive_struct(input: &DeriveInput, fields: &FieldsNamed) -> Result<TokenS
             }
 
             impl #impl_generics miniserde::Deserialize for #ident #ty_generics #bounded_where_clause {
-                fn begin(__out: &mut miniserde::export::Option<Self>) -> &mut dyn miniserde::de::Visitor {
+                fn view(__out: &mut miniserde::export::Option<Self>) -> &mut dyn miniserde::de::Visitor {
                     unsafe {
                         &mut *{
                             __out
@@ -79,7 +79,7 @@ pub fn derive_struct(input: &DeriveInput, fields: &FieldsNamed) -> Result<TokenS
             }
 
             impl #wrapper_impl_generics miniserde::de::Map for __State #wrapper_ty_generics #bounded_where_clause {
-                fn key(&mut self, __k: &miniserde::export::str) -> miniserde::Result<&mut dyn miniserde::de::Visitor> {
+                fn slot_at(&mut self, __k: &miniserde::export::str) -> miniserde::Result<&mut dyn miniserde::de::Visitor> {
                     match __k {
                         #(
                             #fieldstr => miniserde::export::Ok(miniserde::Deserialize::begin(&mut self.#fieldname)),
@@ -144,7 +144,7 @@ pub fn derive_enum(input: &DeriveInput, enumeration: &DataEnum) -> Result<TokenS
             }
 
             impl miniserde::Deserialize for #ident {
-                fn begin(__out: &mut miniserde::export::Option<Self>) -> &mut dyn miniserde::de::Visitor {
+                fn view(__out: &mut miniserde::export::Option<Self>) -> &mut dyn miniserde::de::Visitor {
                     unsafe {
                         &mut *{
                             __out

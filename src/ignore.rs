@@ -1,64 +1,79 @@
-use crate::de::{Map, Seq, Visitor};
-use crate::error::Result;
+use crate::{
+    de::{self, VisitorSlot},
+    error::Result,
+};
 
-impl dyn Visitor {
-    pub fn ignore() -> &'static mut dyn Visitor {
-        careful!(&mut Ignore as &mut Ignore)
+impl dyn VisitorSlot {
+    pub fn ignore() -> &'static mut dyn VisitorSlot {
+        Box::leak(Box::new(Ignore))
     }
 }
 
 struct Ignore;
 
-impl Visitor for Ignore {
-    fn null(&mut self) -> Result<()> {
+// #[with(dyn_safe = true)]
+impl VisitorSlot for Ignore {
+    fn write_null(&mut self) -> Result<()> {
         Ok(())
     }
 
-    fn boolean(&mut self, _b: bool) -> Result<()> {
+    fn write_boolean(&mut self, _: bool) -> Result<()> {
         Ok(())
     }
 
-    fn string(&mut self, _s: &str) -> Result<()> {
+    fn write_string(&mut self, _: &str) -> Result<()> {
         Ok(())
     }
 
-    fn negative(&mut self, _n: i64) -> Result<()> {
+    fn write_integer(&mut self, _: i128) -> Result<()> {
         Ok(())
     }
 
-    fn nonnegative(&mut self, _n: u64) -> Result<()> {
+    fn write_float(&mut self, _: f64) -> Result<()> {
         Ok(())
     }
 
-    fn float(&mut self, _n: f64) -> Result<()> {
-        Ok(())
+    fn with_seq_slots (
+        self: &'_ mut Self,
+        with: &'_ mut dyn (
+            for<'local>
+            FnMut(Result<&'local mut dyn de::Seq>)
+              -> ::with_locals::dyn_safe::ContinuationReturn
+        ),
+    ) -> crate::de::WithResult
+    {
+        Ok(with(Ok(self)))
     }
 
-    fn seq(&mut self) -> Result<Box<dyn Seq + '_>> {
-        Ok(Box::new(Ignore))
-    }
-
-    fn map(&mut self) -> Result<Box<dyn Map + '_>> {
-        Ok(Box::new(Ignore))
+    fn with_map_slots (
+        self: &'_ mut Self,
+        with: &'_ mut dyn (
+            for<'local>
+            FnMut(Result<&'local mut dyn de::Map>)
+              -> ::with_locals::dyn_safe::ContinuationReturn
+        ),
+    ) -> crate::de::WithResult
+    {
+        Ok(with(Ok(self)))
     }
 }
 
-impl Seq for Ignore {
-    fn element(&mut self) -> Result<&mut dyn Visitor> {
-        Ok(Visitor::ignore())
+impl de::Seq for Ignore {
+    fn next_slot(&mut self) -> Result<&mut dyn VisitorSlot> {
+        Ok(VisitorSlot::ignore())
     }
 
-    fn finish(&mut self) -> Result<()> {
-        Ok(())
-    }
+    // fn finish(&mut self) -> Result<()> {
+    //     Ok(())
+    // }
 }
 
-impl Map for Ignore {
-    fn key(&mut self, _k: &str) -> Result<&mut dyn Visitor> {
-        Ok(Visitor::ignore())
+impl de::Map for Ignore {
+    fn slot_at(&mut self, _: &str) -> Result<&mut dyn VisitorSlot> {
+        Ok(VisitorSlot::ignore())
     }
 
-    fn finish(&mut self) -> Result<()> {
-        Ok(())
-    }
+    // fn finish(&mut self) -> Result<()> {
+    //     Ok(())
+    // }
 }

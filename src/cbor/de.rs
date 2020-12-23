@@ -4,7 +4,7 @@ use std::str;
 
 use self::Event::*;
 use crate::{
-    de::{Deserialize, Map, Seq, VisitorSlot},
+    de::{Deserialize, Map, Seq, Visitor},
     error::{Error, Result},
 };
 
@@ -28,15 +28,9 @@ use crate::{
 ///     Ok(())
 /// }
 /// ```
-pub fn from_str<T: Deserialize>(j: &str) -> Result<T> {
+pub fn from_bytes<T: Deserialize>(j: &[u8]) -> Result<T> {
     let mut out = None;
-    let mut de = Deserializer {
-        input: j.as_bytes(),
-        pos: 0,
-        buffer: Vec::new(),
-        // stack: Vec::new(),
-    };
-    from_str_impl(j, T::begin(&mut out))?;
+    from_bytes_impl(j, T::view(&mut out))?;
     out.ok_or(Error)
 }
 
@@ -44,7 +38,7 @@ struct Deserializer<'a, 'b> {
     input: &'a [u8],
     pos: usize,
     buffer: Vec<u8>,
-    // stack: Vec<(&'b mut dyn VisitorSlot, Layer<'b>)>,
+    stack: Vec<(&'b mut dyn Visitor, Layer<'b>)>,
 }
 
 enum Layer<'a> {
@@ -61,108 +55,118 @@ impl<'a, 'b> Drop for Deserializer<'a, 'b> {
     }
 }
 
-fn from_str_impl(
-    de: &mut Deserializer<'_>,
-    // j: &str,
-    // pos: 0,
-    mut slot: &mut dyn VisitorSlot,
-) -> Result<()> {
-    let handle_layer = mk_handle_layer(de);
+fn from_bytes_impl(j: &[u8], mut visitor: &mut dyn Visitor) -> Result<()> {
+    let mut de = Deserializer {
+        input: j.as_bytes(),
+        pos: 0,
+        buffer: Vec::new(),
+        stack: Vec::new(),
+    };
+
     'outer: loop {
         let layer = match de.event()? {
             Null => {
-                slot.write_null()?;
+                visitor.null()?;
                 None
             }
             Bool(b) => {
-                slot.write_boolean(b)?;
+                visitor.boolean(b)?;
                 None
             }
-            Integer(i) => {
-                slot.write_integer(i)?;
+            Negative(n) => {
+                visitor.negative(n)?;
+                None
+            }
+            Nonnegative(n) => {
+                visitor.nonnegative(n)?;
                 None
             }
             Float(n) => {
-                slot.write_float(n)?;
+                visitor.float(n)?;
                 None
             }
             Str(s) => {
-                slot.write_string(s)?;
+                visitor.string(s)?;
                 None
             }
             SeqStart => {
-                slot.with_seq_slots(|seq| {
-                    handle_layer(Layer::Seq(seq));
-                })
-                // let seq = careful!(slot.seq()? as Box<dyn Seq>);
-                // Some(Layer::Seq(seq))
+                let seq = careful!(visitor.seq()? as Box<dyn Seq>);
+                Some(Layer::Seq(seq))
             }
             MapStart => {
-                slot.with_map_slots(|map| {
-                    handle_layer(Layer::Map(map))
-                })
-                // let map = careful!(slot.map()? as Box<dyn Map>);
-                // Some(Layer::Map(map))
+                let map = careful!(visitor.map()? as Box<dyn Map>);
+                Some(Layer::Map(map))
             }
         };
 
-        fn mk_handle_layer<'de, 'input> (de: &'de mut Deserializer<'input>)
-          -> impl (
-                for<'slot> FnOnce(Layer<'slot>) -> ()
-                + 'de
-                + Captures<'input>
-          )
-        {
-            move |layer: Layer<'_>| {
-                let mut accept_comma = false;
+        let mut accept_comma;
+        let mut layer = match layer {
+            Some(layer) => {
+                accept_comma = false;
+                layer
+            }
+            None => match de.stack.pop() {
+                Some(frame) => {
+                    accept_comma = true;
+                    visitor = frame.0;
+                    frame.1
+                }
+                None => break 'outer,
+            },
+        };
 
-                loop {
-                    match de.parse_whitespace().unwrap_or(b'\0') {
-                        b',' if accept_comma => {
-                            de.bump();
-                            break;
-                        }
-                        close @ b']' | close @ b'}' => {
-                            de.bump();
-                            return match layer {
-                                Layer::Seq(&mut ref mut seq) if close == b']' => Ok(()), // seq.finish()?,
-                                Layer::Map(&mut ref mut map) if close == b'}' => Ok(()), // map.finish()?,
-                                _ => Err(Error),
-                            };
-                        }
-                        _ => {
-                            if accept_comma {
-                                return Err(Error);
-                            } else {
-                                break;
-                            }
-                        }
+        loop {
+            match de.parse_whitespace().unwrap_or(b'\0') {
+                b',' if accept_comma => {
+                    de.bump();
+                    break;
+                }
+                close @ b']' | close @ b'}' => {
+                    de.bump();
+                    match &mut layer {
+                        Layer::Seq(seq) if close == b']' => seq.finish()?,
+                        Layer::Map(map) if close == b'}' => map.finish()?,
+                        _ => return Err(Error),
+                    };
+                    let frame = match de.stack.pop() {
+                        Some(frame) => frame,
+                        None => break 'outer,
+                    };
+                    accept_comma = true;
+                    visitor = frame.0;
+                    layer = frame.1;
+                }
+                _ => {
+                    if accept_comma {
+                        return Err(Error);
+                    } else {
+                        break;
                     }
                 }
+            }
+        }
 
-                match layer {
-                    Layer::Seq(mut seq) => {
-                        let inner = seq.next_slot()?;
-                        let outer = mem::replace(&mut slot, inner);
-                        de.stack.push((outer, Layer::Seq(seq)));
-                    }
-                    Layer::Map(mut map) => {
-                        match de.parse_whitespace() {
-                            Some(b'"') => de.bump(),
-                            _ => return Err(Error),
-                        }
-                        let inner = {
-                            let k = de.parse_str()?;
-                            careful!(map.slot_at(k)? as &mut dyn VisitorSlot)
-                        };
-                        match de.parse_whitespace() {
-                            Some(b':') => de.bump(),
-                            _ => return Err(Error),
-                        }
-                        let outer = mem::replace(&mut slot, inner);
-                        de.stack.push((outer, Layer::Map(map)));
-                    }
+        match layer {
+            Layer::Seq(mut seq) => {
+                let inner = careful!(seq.next_slot()? as &mut dyn Visitor);
+                let outer = mem::replace(&mut visitor, inner);
+                de.stack.push((outer, Layer::Seq(seq)));
+            }
+            Layer::Map(mut map) => {
+                match de.parse_whitespace() {
+                    Some(b'"') => de.bump(),
+                    _ => return Err(Error),
                 }
+                let inner = {
+                    let k = de.parse_str()?;
+                    careful!(map.slot_at(k)? as &mut dyn Visitor)
+                };
+                match de.parse_whitespace() {
+                    Some(b':') => de.bump(),
+                    _ => return Err(Error),
+                }
+                let outer = mem::replace(&mut visitor, inner);
+                de.stack.push((outer, Layer::Map(map)));
             }
         }
     }
@@ -177,7 +181,8 @@ enum Event<'a> {
     Null,
     Bool(bool),
     Str(&'a str),
-    Integer(i128),
+    Negative(i64),
+    Nonnegative(u64),
     Float(f64),
     SeqStart,
     MapStart,
@@ -458,7 +463,7 @@ impl<'a, 'b> Deserializer<'a, 'b> {
             b'e' | b'E' => self.parse_exponent(nonnegative, significand, 0).map(Float),
             _ => {
                 Ok(if nonnegative {
-                    Integer(significand as _)
+                    Nonnegative(significand)
                 } else {
                     let neg = (significand as i64).wrapping_neg();
 
@@ -466,7 +471,7 @@ impl<'a, 'b> Deserializer<'a, 'b> {
                     if neg > 0 {
                         Float(-(significand as f64))
                     } else {
-                        Integer(neg)
+                        Negative(neg)
                     }
                 })
             }

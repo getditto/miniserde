@@ -145,14 +145,11 @@
     clippy::manual_range_contains,
 )]
 
-#[doc(hidden)]
-pub use mini_internal::*;
+#[macro_use]
+extern crate with_locals;
 
-// These derives were renamed from MiniTrait -> Trait with the release of Rust
-// 1.30.0. Keep exposing the old names for backward compatibility but remove in
-// the next major version of Miniserde.
 #[doc(hidden)]
-pub use mini_internal::{Deserialize as MiniDeserialize, Serialize as MiniSerialize};
+pub use ::derives::*;
 
 // Not public API.
 #[doc(hidden)]
@@ -167,6 +164,7 @@ mod place;
 mod error;
 mod ignore;
 
+// pub mod cbor;
 pub mod de;
 pub mod json;
 pub mod ser;

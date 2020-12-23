@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use crate::ser::{ValueView, Map, Seq, Serialize};
 
-/// Serialize any serializable type into a JSON string.
+/// Serialize any serializable type into a JSON Vec<u8>.
 ///
 /// ```rust
 /// use miniserde::{json, Serialize};
@@ -10,7 +10,7 @@ use crate::ser::{ValueView, Map, Seq, Serialize};
 /// #[derive(Serialize, Debug)]
 /// struct Example {
 ///     code: u32,
-///     message: String,
+///     message: Vec<u8>,
 /// }
 ///
 /// fn main() {
@@ -19,12 +19,12 @@ use crate::ser::{ValueView, Map, Seq, Serialize};
 ///         message: "reminiscent of Serde".to_owned(),
 ///     };
 ///
-///     let j = json::to_string(&example);
+///     let j = json::to_bytes(&example);
 ///     println!("{}", j);
 /// }
 /// ```
-pub fn to_string<T: ?Sized + Serialize>(value: &T) -> String {
-    to_string_impl(&value)
+pub fn to_bytes<T: ?Sized + Serialize>(value: &T) -> Vec<u8> {
+    to_bytes_impl(&value)
 }
 
 struct Serializer<'a> {
@@ -32,8 +32,8 @@ struct Serializer<'a> {
 }
 
 enum Layer<'a> {
-    Seq(Box<dyn Seq<'a>>),
-    Map(Box<dyn Map<'a>>),
+    Seq(Box<dyn Seq + 'a>),
+    Map(Box<dyn Map + 'a>),
 }
 
 impl<'a> Drop for Serializer<'a> {
@@ -45,8 +45,8 @@ impl<'a> Drop for Serializer<'a> {
     }
 }
 
-fn to_string_impl(value: &dyn Serialize) -> String {
-    let mut out = String::new();
+fn to_bytes_impl(value: &dyn Serialize) -> Vec<u8> {
+    let mut out = Vec::<u8>::new();
     let mut serializer = Serializer { stack: Vec::new() };
     let mut fragment = value.view();
 
@@ -55,7 +55,8 @@ fn to_string_impl(value: &dyn Serialize) -> String {
             ValueView::Null => out.push_str("null"),
             ValueView::Bool(b) => out.push_str(if b { "true" } else { "false" }),
             ValueView::Str(s) => escape_str(&s, &mut out),
-            ValueView::Int(i) => out.push_str(itoa::Buffer::new().format(i)),
+            ValueView::U64(n) => out.push_str(itoa::Buffer::new().format(n)),
+            ValueView::I64(n) => out.push_str(itoa::Buffer::new().format(n)),
             ValueView::Float(n) => {
                 if n.is_finite() {
                     out.push_str(ryu::Buffer::new().format_finite(n))
@@ -66,7 +67,7 @@ fn to_string_impl(value: &dyn Serialize) -> String {
             ValueView::Seq(mut seq) => {
                 out.push('[');
                 // invariant: `seq` must outlive `first`
-                match seq.next() {
+                match careful!(seq.next() as Option<&dyn Serialize>) {
                     Some(first) => {
                         serializer.stack.push(Layer::Seq(seq));
                         fragment = first.view();
@@ -126,7 +127,7 @@ fn to_string_impl(value: &dyn Serialize) -> String {
 
 // Clippy false positive: https://github.com/rust-lang/rust-clippy/issues/5169
 #[allow(clippy::zero_prefixed_literal)]
-fn escape_str(value: &str, out: &mut String) {
+fn escape_str(value: &str, out: &mut Vec<u8>) {
     out.push('"');
 
     let bytes = value.as_bytes();

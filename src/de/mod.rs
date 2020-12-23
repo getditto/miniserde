@@ -1,7 +1,7 @@
 //! Deserialization traits.
 //!
 //! Deserialization in miniserde works by returning a "place" into which data
-//! may be written through the methods of the `Visitor` trait object.
+//! may be written through the methods of the `VisitorSlot` trait object.
 //!
 //! Use the `make_place!` macro to acquire a "place" type. A library may use a
 //! single place type across all of its Deserialize impls, or each impl or each
@@ -20,24 +20,24 @@
 //!
 //! ## Deserializing a primitive
 //!
-//! The Visitor trait has a method corresponding to each supported primitive
+//! The VisitorSlot trait has a method corresponding to each supported primitive
 //! type.
 //!
 //! ```rust
 //! use miniserde::{make_place, Result};
-//! use miniserde::de::{Deserialize, Visitor};
+//! use miniserde::de::{Deserialize, VisitorSlot};
 //!
 //! make_place!(Place);
 //!
 //! struct MyBoolean(bool);
 //!
-//! // The Visitor trait has a selection of methods corresponding to different
+//! // The VisitorSlot trait has a selection of methods corresponding to different
 //! // data types. We override the ones that our Rust type supports
 //! // deserializing from, and write the result into the `out` field of our
 //! // output place.
 //! //
 //! // These methods may perform validation and decide to return an error.
-//! impl Visitor for Place<MyBoolean> {
+//! impl VisitorSlot for Place<MyBoolean> {
 //!     fn boolean(&mut self, b: bool) -> Result<()> {
 //!         self.out = Some(MyBoolean(b));
 //!         Ok(())
@@ -45,7 +45,7 @@
 //! }
 //!
 //! impl Deserialize for MyBoolean {
-//!     fn begin(out: &mut Option<Self>) -> &mut dyn Visitor {
+//!     fn begin(out: &mut Option<Self>) -> &mut dyn VisitorSlot {
 //!         // All Deserialize impls will look exactly like this. There is no
 //!         // other correct implementation of Deserialize.
 //!         Place::new(out)
@@ -55,24 +55,24 @@
 //!
 //! ## Deserializing a sequence
 //!
-//! In the case of a sequence (JSON array), the visitor method returns a builder
-//! that can hand out places to write sequence elements one element at a time.
+//! In the case of a sequence (JSON array), the VisitorSlot method returns a builder
+//! that can hand out places to write sequence next_slots one next_slot at a time.
 //!
 //! ```rust
 //! use miniserde::{make_place, Result};
-//! use miniserde::de::{Deserialize, Seq, Visitor};
+//! use miniserde::de::{Deserialize, Seq, VisitorSlot};
 //! use std::mem;
 //!
 //! make_place!(Place);
 //!
 //! struct MyVec<T>(Vec<T>);
 //!
-//! impl<T: Deserialize> Visitor for Place<MyVec<T>> {
+//! impl<T: Deserialize> VisitorSlot for Place<MyVec<T>> {
 //!     fn seq(&mut self) -> Result<Box<dyn Seq + '_>> {
 //!         Ok(Box::new(VecBuilder {
 //!             out: &mut self.out,
 //!             vec: Vec::new(),
-//!             element: None,
+//!             next_slot: None,
 //!         }))
 //!     }
 //! }
@@ -80,24 +80,24 @@
 //! struct VecBuilder<'a, T: 'a> {
 //!     // At the end, output will be written here.
 //!     out: &'a mut Option<MyVec<T>>,
-//!     // Previous elements are accumulated here.
+//!     // Previous next_slots are accumulated here.
 //!     vec: Vec<T>,
-//!     // Next element will be placed here.
-//!     element: Option<T>,
+//!     // Next next_slot will be placed here.
+//!     next_slot: Option<T>,
 //! }
 //!
 //! impl<'a, T: Deserialize> Seq for VecBuilder<'a, T> {
-//!     fn element(&mut self) -> Result<&mut dyn Visitor> {
-//!         // Free up the place by transfering the most recent element
+//!     fn next_slot(&mut self) -> Result<&mut dyn VisitorSlot> {
+//!         // Free up the place by transfering the most recent next_slot
 //!         // into self.vec.
-//!         self.vec.extend(self.element.take());
-//!         // Hand out a place to write the next element.
-//!         Ok(Deserialize::begin(&mut self.element))
+//!         self.vec.extend(self.next_slot.take());
+//!         // Hand out a place to write the next next_slot.
+//!         Ok(Deserialize::begin(&mut self.next_slot))
 //!     }
 //!
 //!     fn finish(&mut self) -> Result<()> {
-//!         // Transfer the last element.
-//!         self.vec.extend(self.element.take());
+//!         // Transfer the last next_slot.
+//!         self.vec.extend(self.next_slot.take());
 //!         // Move the output object into self.out.
 //!         let vec = mem::replace(&mut self.vec, Vec::new());
 //!         *self.out = Some(MyVec(vec));
@@ -106,7 +106,7 @@
 //! }
 //!
 //! impl<T: Deserialize> Deserialize for MyVec<T> {
-//!     fn begin(out: &mut Option<Self>) -> &mut dyn Visitor {
+//!     fn begin(out: &mut Option<Self>) -> &mut dyn VisitorSlot {
 //!         // As mentioned, all Deserialize impls will look like this.
 //!         Place::new(out)
 //!     }
@@ -120,7 +120,7 @@
 //!
 //! ```rust
 //! use miniserde::{make_place, Result};
-//! use miniserde::de::{Deserialize, Map, Visitor};
+//! use miniserde::de::{Deserialize, Map, VisitorSlot};
 //!
 //! make_place!(Place);
 //!
@@ -130,7 +130,7 @@
 //!     message: String,
 //! }
 //!
-//! impl Visitor for Place<Demo> {
+//! impl VisitorSlot for Place<Demo> {
 //!     fn map(&mut self) -> Result<Box<dyn Map + '_>> {
 //!         // Like for sequences, we produce a builder that can hand out places
 //!         // to write one struct field at a time.
@@ -149,7 +149,7 @@
 //! }
 //!
 //! impl<'a> Map for DemoBuilder<'a> {
-//!     fn key(&mut self, k: &str) -> Result<&mut dyn Visitor> {
+//!     fn slot_at(&mut self, k: &str) -> Result<&mut dyn VisitorSlot> {
 //!         // Figure out which field is being deserialized and return a place
 //!         // to write it.
 //!         //
@@ -160,7 +160,7 @@
 //!         match k {
 //!             "code" => Ok(Deserialize::begin(&mut self.code)),
 //!             "message" => Ok(Deserialize::begin(&mut self.message)),
-//!             _ => Ok(Visitor::ignore()),
+//!             _ => Ok(VisitorSlot::ignore()),
 //!         }
 //!     }
 //!
@@ -175,16 +175,23 @@
 //! }
 //!
 //! impl Deserialize for Demo {
-//!     fn begin(out: &mut Option<Self>) -> &mut dyn Visitor {
+//!     fn begin(out: &mut Option<Self>) -> &mut dyn VisitorSlot {
 //!         // All Deserialize impls look like this.
 //!         Place::new(out)
 //!     }
 //! }
 //! ```
 
+use crate::error::{Error, Result};
+
+pub(in crate)
 mod impls;
 
-use crate::error::{Error, Result};
+pub(in crate)
+type WithResult = Result<
+    ::with_locals::dyn_safe::ContinuationReturn,
+    ::with_locals::dyn_safe::ContinuationReturn,
+>;
 
 /// Trait for data structures that can be deserialized from a JSON string.
 ///
@@ -194,19 +201,19 @@ pub trait Deserialize: Sized {
     ///
     /// ```rust
     /// # use miniserde::make_place;
-    /// # use miniserde::de::{Deserialize, Visitor};
+    /// # use miniserde::de::{Deserialize, VisitorSlot};
     /// #
     /// # make_place!(Place);
     /// # struct S;
-    /// # impl Visitor for Place<S> {}
+    /// # impl VisitorSlot for Place<S> {}
     /// #
     /// # impl Deserialize for S {
-    /// fn begin(out: &mut Option<Self>) -> &mut dyn Visitor {
+    /// fn begin(out: &mut Option<Self>) -> &mut dyn VisitorSlot {
     ///     Place::new(out)
     /// }
     /// # }
     /// ```
-    fn begin(out: &mut Option<Self>) -> &mut dyn Visitor;
+    fn begin(out: &mut Option<Self>) -> &mut dyn VisitorSlot;
 
     // Not public API. This method is only intended for Option<T>, should not
     // need to be implemented outside of this crate.
@@ -220,57 +227,73 @@ pub trait Deserialize: Sized {
 /// Trait that can write data into an output place.
 ///
 /// [Refer to the module documentation for examples.][::de]
-pub trait Visitor {
-    fn null(&mut self) -> Result<()> {
+#[allow(unused)]
+// #[with(dyn_safe = true)]
+pub trait VisitorSlot {
+    fn write_null(&mut self) -> Result<()> {
         Err(Error)
     }
 
-    fn boolean(&mut self, b: bool) -> Result<()> {
-        let _ = b;
+    fn write_boolean(&mut self, b: bool) -> Result<()> {
         Err(Error)
     }
 
-    fn string(&mut self, s: &str) -> Result<()> {
-        let _ = s;
+    fn write_string(&mut self, s: &str) -> Result<()> {
         Err(Error)
     }
 
-    fn negative(&mut self, n: i64) -> Result<()> {
-        let _ = n;
+    fn write_integer(&mut self, i: i128) -> Result<()> {
         Err(Error)
     }
 
-    fn nonnegative(&mut self, n: u64) -> Result<()> {
-        let _ = n;
+    fn write_float(&mut self, x: f64) -> Result<()> {
         Err(Error)
     }
 
-    fn float(&mut self, n: f64) -> Result<()> {
-        let _ = n;
-        Err(Error)
+    fn with_seq_slots (
+        self: &'_ mut Self,
+        with: &'_ mut dyn (
+            for<'local>
+            FnMut(Result<&'local mut dyn Seq>)
+              -> ::with_locals::dyn_safe::ContinuationReturn
+        ),
+    ) -> WithResult
+    {
+        Err(with(Err(Error)))
     }
 
-    fn seq(&mut self) -> Result<Box<dyn Seq + '_>> {
-        Err(Error)
+    fn with_map_slots (
+        self: &'_ mut Self,
+        with: &'_ mut dyn (
+            for<'local>
+            FnMut(Result<&'local mut dyn Map>)
+              -> ::with_locals::dyn_safe::ContinuationReturn
+        ),
+    ) -> WithResult
+    {
+        Err(with(Err(Error)))
     }
+    // fn seq_slots(&mut self) -> Result<&'ref mut dyn Seq> {
+    //     Err(Error)
+    // }
 
-    fn map(&mut self) -> Result<Box<dyn Map + '_>> {
-        Err(Error)
-    }
+    // fn map_slots(&mut self) -> Result<&'ref mut dyn Map> {
+    //     Err(Error)
+    // }
 }
 
-/// Trait that can hand out places to write sequence elements.
+/// Trait that can hand out places to write sequence next_slots.
 ///
-/// [Refer to the module documentation for examples.][::de]
+/// [Refer to the module documentation for examples.][crate::de]
 pub trait Seq {
-    fn element(&mut self) -> Result<&mut dyn Visitor>;
-    fn finish(&mut self) -> Result<()>;
+    fn next_slot(&mut self) -> Result<&mut dyn VisitorSlot>;
+    // fn finish(&mut self) -> Result<()>;
 }
 
 /// Trait that can hand out places to write values of a map.
 ///
-/// [Refer to the module documentation for examples.][::de]
+/// [Refer to the module documentation for examples.][crate::de]
 pub trait Map {
-    fn key(&mut self, k: &str) -> Result<&mut dyn Visitor>;
-    fn finish(&mut self) -> Result<()>;
+    fn slot_at(&mut self, k: &str) -> Result<&mut dyn VisitorSlot>;
+    // fn finish(&mut self) -> Result<()>;
 }

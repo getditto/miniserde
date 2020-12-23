@@ -8,7 +8,7 @@ use std::fmt::{self, Display};
 pub struct Error;
 
 /// Result type returned by deserialization functions.
-pub type Result<T> = std::result::Result<T, Error>;
+pub type Result<Ok, Err = Error> = std::result::Result<Ok, Err>;
 
 impl Display for Error {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {

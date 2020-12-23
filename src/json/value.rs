@@ -1,12 +1,20 @@
 use std::borrow::Cow;
 use std::mem;
 
-use crate::de::{Deserialize, Map, Seq, Visitor};
-use crate::error::Result;
-use crate::json::{Array, Number, Object};
-use crate::private;
-use crate::ser::{Fragment, Serialize};
-use crate::Place;
+use crate::{
+    de::{
+        Deserialize,
+        impls::{MapBuilder, VecBuilder},
+        Map,
+        Seq,
+        VisitorSlot,
+    },
+    error::{Error, Result},
+    json::{Array, Number, Object},
+    private,
+    Place,
+    ser::{ValueView, Serialize},
+};
 
 /// Any valid JSON value.
 ///
@@ -42,14 +50,14 @@ impl Default for Value {
 }
 
 impl Serialize for Value {
-    fn begin(&self) -> Fragment {
+    fn view(&self) -> ValueView {
         match self {
-            Value::Null => Fragment::Null,
-            Value::Bool(b) => Fragment::Bool(*b),
-            Value::Number(Number::U64(n)) => Fragment::U64(*n),
-            Value::Number(Number::I64(n)) => Fragment::I64(*n),
-            Value::Number(Number::F64(n)) => Fragment::F64(*n),
-            Value::String(s) => Fragment::Str(Cow::Borrowed(s)),
+            Value::Null => ValueView::Null,
+            Value::Bool(b) => ValueView::Bool(*b),
+            Value::Number(Number::U64(n)) => ValueView::U64(*n),
+            Value::Number(Number::I64(n)) => ValueView::I64(*n),
+            Value::Number(Number::Float(n)) => ValueView::Float(*n),
+            Value::String(s) => ValueView::Str(Cow::Borrowed(s)),
             Value::Array(array) => private::stream_slice(array),
             Value::Object(object) => private::stream_object(object),
         }
@@ -57,109 +65,83 @@ impl Serialize for Value {
 }
 
 impl Deserialize for Value {
-    fn begin(out: &mut Option<Self>) -> &mut dyn Visitor {
-        impl Visitor for Place<Value> {
-            fn null(&mut self) -> Result<()> {
+    fn begin(out: &mut Option<Self>) -> &mut dyn VisitorSlot {
+        impl VisitorSlot for Place<Value> {
+            fn write_null(&mut self) -> Result<()> {
                 self.out = Some(Value::Null);
                 Ok(())
             }
 
-            fn boolean(&mut self, b: bool) -> Result<()> {
+            fn write_boolean(&mut self, b: bool) -> Result<()> {
                 self.out = Some(Value::Bool(b));
                 Ok(())
             }
 
-            fn string(&mut self, s: &str) -> Result<()> {
+            fn write_string(&mut self, s: &str) -> Result<()> {
                 self.out = Some(Value::String(s.to_owned()));
                 Ok(())
             }
 
-            fn negative(&mut self, n: i64) -> Result<()> {
-                self.out = Some(Value::Number(Number::I64(n)));
+            fn write_integer(&mut self, i: i128) -> Result<()> {
+                self.out = Some(Value::Number(if i > 0 {
+                    if let Ok(n) = i.try_into() {
+                        Number::U64(n)
+                    } else {
+                        return Err(Error);
+                    }
+                } else {
+                    if let Ok(i) = i.try_into() {
+                        Number::I64(i)
+                    } else {
+                        return Err(Error);
+                    }
+                }));
                 Ok(())
             }
 
-            fn nonnegative(&mut self, n: u64) -> Result<()> {
-                self.out = Some(Value::Number(Number::U64(n)));
+            fn write_float(&mut self, n: f64) -> Result<()> {
+                self.out = Some(Value::Number(Number::Float(n)));
                 Ok(())
             }
 
-            fn float(&mut self, n: f64) -> Result<()> {
-                self.out = Some(Value::Number(Number::F64(n)));
-                Ok(())
+            fn with_seq_slots (
+                self: &'_ mut Place<Value>,
+                fill_seq: &'_ mut dyn (
+                    for<'local>
+                    FnMut(Result<&'local mut dyn Seq>)
+                      -> ::with_locals::dyn_safe::ContinuationReturn
+                ),
+            ) -> crate::de::WithResult
+            {
+                let mut builder = VecBuilder {
+                    vec: vec![],
+                    next_slot: None,
+                };
+                let ret = fill_seq(&mut builder);
+                builder.vec.extend(builder.next_slot);
+                self.out = Some(Value::Array(builder.vec));
+                Ok(ret)
             }
 
-            fn seq(&mut self) -> Result<Box<dyn Seq + '_>> {
-                Ok(Box::new(ArrayBuilder {
-                    out: &mut self.out,
-                    array: Array::new(),
-                    element: None,
-                }))
-            }
-
-            fn map(&mut self) -> Result<Box<dyn Map + '_>> {
-                Ok(Box::new(ObjectBuilder {
-                    out: &mut self.out,
-                    object: Object::new(),
-                    key: None,
-                    value: None,
-                }))
-            }
-        }
-
-        struct ArrayBuilder<'a> {
-            out: &'a mut Option<Value>,
-            array: Array,
-            element: Option<Value>,
-        }
-
-        impl<'a> ArrayBuilder<'a> {
-            fn shift(&mut self) {
-                if let Some(e) = self.element.take() {
-                    self.array.push(e);
+            fn with_map_slots (
+                self: &'_ mut Place<Value>,
+                with: &'_ mut dyn (
+                    for<'local>
+                    FnMut(Result<&'local mut dyn Map>)
+                      -> ::with_locals::dyn_safe::ContinuationReturn
+                ),
+            ) -> crate::de::WithResult
+            {
+                let mut builder = MapBuilder {
+                    map: Default::default(),
+                    next_slot: (None, None),
+                };
+                let ret = with(&mut builder);
+                if let (Some(k), Some(v)) = builder.next_slot {
+                    builder.map.insert(k, v);
                 }
-            }
-        }
-
-        impl<'a> Seq for ArrayBuilder<'a> {
-            fn element(&mut self) -> Result<&mut dyn Visitor> {
-                self.shift();
-                Ok(Deserialize::begin(&mut self.element))
-            }
-
-            fn finish(&mut self) -> Result<()> {
-                self.shift();
-                *self.out = Some(Value::Array(mem::replace(&mut self.array, Array::new())));
-                Ok(())
-            }
-        }
-
-        struct ObjectBuilder<'a> {
-            out: &'a mut Option<Value>,
-            object: Object,
-            key: Option<String>,
-            value: Option<Value>,
-        }
-
-        impl<'a> ObjectBuilder<'a> {
-            fn shift(&mut self) {
-                if let (Some(k), Some(v)) = (self.key.take(), self.value.take()) {
-                    self.object.insert(k, v);
-                }
-            }
-        }
-
-        impl<'a> Map for ObjectBuilder<'a> {
-            fn key(&mut self, k: &str) -> Result<&mut dyn Visitor> {
-                self.shift();
-                self.key = Some(k.to_owned());
-                Ok(Deserialize::begin(&mut self.value))
-            }
-
-            fn finish(&mut self) -> Result<()> {
-                self.shift();
-                *self.out = Some(Value::Object(mem::replace(&mut self.object, Object::new())));
-                Ok(())
+                self.out = Some(Value::Object(builder.map));
+                Ok(ret)
             }
         }
 

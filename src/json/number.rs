@@ -3,5 +3,5 @@
 pub enum Number {
     U64(u64),
     I64(i64),
-    F64(f64),
+    Float(f64),
 }
