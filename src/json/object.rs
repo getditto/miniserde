@@ -92,8 +92,8 @@ impl private {
     pub fn stream_object(object: &Object) -> ValueView<'_> {
         struct ObjectIter<'a>(btree_map::Iter<'a, String, Value>);
 
-        impl<'a> ser::Map for ObjectIter<'a> {
-            fn next(&mut self) -> Option<(Cow<'_, str>, &dyn Serialize)> {
+        impl<'a> ser::Map<'a> for ObjectIter<'a> {
+            fn next(&mut self) -> Option<(Cow<'a, str>, &'a dyn Serialize)> {
                 let (k, v) = self.0.next()?;
                 Some((Cow::Borrowed(k), v as &dyn Serialize))
             }

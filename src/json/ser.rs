@@ -32,8 +32,8 @@ struct Serializer<'a> {
 }
 
 enum Layer<'a> {
-    Seq(Box<dyn Seq + 'a>),
-    Map(Box<dyn Map + 'a>),
+    Seq(Box<dyn Seq<'a> + 'a>),
+    Map(Box<dyn Map<'a> + 'a>),
 }
 
 impl<'a> Drop for Serializer<'a> {

@@ -44,7 +44,7 @@ fn derive_struct(input: &DeriveInput, fields: &FieldsNamed) -> Result<TokenStrea
         #[allow(non_upper_case_globals)]
         const #dummy: () = {
             impl #impl_generics miniserde_ditto::Serialize for #ident #ty_generics #bounded_where_clause {
-                fn begin(&self) -> miniserde_ditto::ser::ValueView {
+                fn begin(&self) -> miniserde_ditto::ser::ValueView<'_> {
                     miniserde_ditto::ser::ValueView::Map(miniserde_ditto::export::Box::new(__Map {
                         data: self,
                         state: 0,
@@ -57,8 +57,8 @@ fn derive_struct(input: &DeriveInput, fields: &FieldsNamed) -> Result<TokenStrea
                 state: miniserde_ditto::export::usize,
             }
 
-            impl #wrapper_impl_generics miniserde_ditto::ser::Map for __Map #wrapper_ty_generics #bounded_where_clause {
-                fn next(&mut self) -> miniserde_ditto::export::Option<(miniserde_ditto::export::Cow<miniserde_ditto::export::str>, &dyn miniserde_ditto::Serialize)> {
+            impl #wrapper_impl_generics miniserde_ditto::ser::Map<'__a> for __Map #wrapper_ty_generics #bounded_where_clause {
+                fn next(&mut self) -> miniserde_ditto::export::Option<(miniserde_ditto::export::Cow<'__a, miniserde_ditto::export::str>, &'__a dyn miniserde_ditto::Serialize)> {
                     let __state = self.state;
                     self.state = __state + 1;
                     match __state {
@@ -111,7 +111,7 @@ fn derive_enum(input: &DeriveInput, enumeration: &DataEnum) -> Result<TokenStrea
         #[allow(non_upper_case_globals)]
         const #dummy: () = {
             impl miniserde_ditto::Serialize for #ident {
-                fn begin(&self) -> miniserde_ditto::ser::ValueView {
+                fn begin(&self) -> miniserde_ditto::ser::ValueView<'_> {
                     match self {
                         #(
                             #ident::#var_idents => {
