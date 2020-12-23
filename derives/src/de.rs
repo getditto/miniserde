@@ -88,9 +88,9 @@ pub fn derive_struct(input: &DeriveInput, fields: &FieldsNamed) -> Result<TokenS
                     }
                 }
 
-                fn finish(&mut self) -> miniserde_ditto::Result<()> {
+                fn finish(self: miniserde_ditto::__private::Box<Self>) -> miniserde_ditto::Result<()> {
                     #(
-                        let #fieldname = self.#fieldname.take().ok_or(miniserde_ditto::Error)?;
+                        let #fieldname = self.#fieldname.ok_or(miniserde_ditto::Error)?;
                     )*
                     *self.__out = miniserde_ditto::__private::Some(#ident {
                         #(

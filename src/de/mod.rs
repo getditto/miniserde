@@ -95,7 +95,7 @@
 //!         Ok(Deserialize::begin(&mut self.element))
 //!     }
 //!
-//!     fn finish(&mut self) -> Result<()> {
+//!     fn finish(self: Box<Self>) -> Result<()> {
 //!         // Transfer the last element.
 //!         self.vec.extend(self.element.take());
 //!         // Move the output object into self.out.
@@ -164,7 +164,7 @@
 //!         }
 //!     }
 //!
-//!     fn finish(&mut self) -> Result<()> {
+//!     fn finish(self: Box<Self>) -> Result<()> {
 //!         // Make sure we have every field and then write the output object
 //!         // into self.out.
 //!         let code = self.code.take().ok_or(miniserde::Error)?;
@@ -264,7 +264,7 @@ pub trait Visitor {
 /// [Refer to the module documentation for examples.][crate::de]
 pub trait Seq {
     fn element(&mut self) -> Result<&mut dyn Visitor>;
-    fn finish(&mut self) -> Result<()>;
+    fn finish(self: Box<Self>) -> Result<()>;
 }
 
 /// Trait that can hand out places to write values of a map.
@@ -272,5 +272,5 @@ pub trait Seq {
 /// [Refer to the module documentation for examples.][crate::de]
 pub trait Map {
     fn key(&mut self, k: &str) -> Result<&mut dyn Visitor>;
-    fn finish(&mut self) -> Result<()>;
+    fn finish(self: Box<Self>) -> Result<()>;
 }
