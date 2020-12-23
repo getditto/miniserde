@@ -7,7 +7,7 @@ use std::ptr;
 
 use crate::json::{drop, Value};
 use crate::private;
-use crate::ser::{self, Fragment, Serialize};
+use crate::ser::{self, ValueView, Serialize};
 
 /// A `BTreeMap<String, Value>` with a non-recursive drop impl.
 #[derive(Clone, Debug, Default)]
@@ -89,7 +89,7 @@ impl FromIterator<(String, Value)> for Object {
 }
 
 impl private {
-    pub fn stream_object(object: &Object) -> Fragment {
+    pub fn stream_object(object: &Object) -> ValueView {
         struct ObjectIter<'a>(btree_map::Iter<'a, String, Value>);
 
         impl<'a> ser::Map for ObjectIter<'a> {
@@ -99,6 +99,6 @@ impl private {
             }
         }
 
-        Fragment::Map(Box::new(ObjectIter(object.iter())))
+        ValueView::Map(Box::new(ObjectIter(object.iter())))
     }
 }
