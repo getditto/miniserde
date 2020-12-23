@@ -1,5 +1,4 @@
 use std::borrow::Cow;
-use std::mem;
 
 use crate::de::{Deserialize, Map, Seq, Visitor};
 use crate::error::Result;
@@ -127,9 +126,9 @@ impl Deserialize for Value {
                 Ok(Deserialize::begin(&mut self.element))
             }
 
-            fn finish(&mut self) -> Result<()> {
+            fn finish(mut self: Box<Self>) -> Result<()> {
                 self.shift();
-                *self.out = Some(Value::Array(mem::replace(&mut self.array, Array::new())));
+                *self.out = Some(Value::Array(self.array));
                 Ok(())
             }
         }
@@ -156,9 +155,9 @@ impl Deserialize for Value {
                 Ok(Deserialize::begin(&mut self.value))
             }
 
-            fn finish(&mut self) -> Result<()> {
+            fn finish(mut self: Box<Self>) -> Result<()> {
                 self.shift();
-                *self.out = Some(Value::Object(mem::replace(&mut self.object, Object::new())));
+                *self.out = Some(Value::Object(self.object));
                 Ok(())
             }
         }
