@@ -154,6 +154,8 @@ pub use ::derives::*;
 #[doc(hidden)]
 pub mod export;
 
+mod aliased_box;
+
 #[macro_use]
 mod careful;
 
