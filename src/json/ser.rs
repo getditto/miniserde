@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use crate::ser::{Fragment, Map, Seq, Serialize};
+use crate::ser::{ValueView, Map, Seq, Serialize};
 
 /// Serialize any serializable type into a JSON string.
 ///
@@ -52,19 +52,19 @@ fn to_string_impl(value: &dyn Serialize) -> String {
 
     loop {
         match fragment {
-            Fragment::Null => out.push_str("null"),
-            Fragment::Bool(b) => out.push_str(if b { "true" } else { "false" }),
-            Fragment::Str(s) => escape_str(&s, &mut out),
-            Fragment::U64(n) => out.push_str(itoa::Buffer::new().format(n)),
-            Fragment::I64(n) => out.push_str(itoa::Buffer::new().format(n)),
-            Fragment::F64(n) => {
+            ValueView::Null => out.push_str("null"),
+            ValueView::Bool(b) => out.push_str(if b { "true" } else { "false" }),
+            ValueView::Str(s) => escape_str(&s, &mut out),
+            ValueView::U64(n) => out.push_str(itoa::Buffer::new().format(n)),
+            ValueView::I64(n) => out.push_str(itoa::Buffer::new().format(n)),
+            ValueView::F64(n) => {
                 if n.is_finite() {
                     out.push_str(ryu::Buffer::new().format_finite(n))
                 } else {
                     out.push_str("null")
                 }
             }
-            Fragment::Seq(mut seq) => {
+            ValueView::Seq(mut seq) => {
                 out.push('[');
                 // invariant: `seq` must outlive `first`
                 match careful!(seq.next() as Option<&dyn Serialize>) {
@@ -76,7 +76,7 @@ fn to_string_impl(value: &dyn Serialize) -> String {
                     None => out.push(']'),
                 }
             }
-            Fragment::Map(mut map) => {
+            ValueView::Map(mut map) => {
                 out.push('{');
                 // invariant: `map` must outlive `first`
                 match careful!(map.next() as Option<(Cow<str>, &dyn Serialize)>) {
