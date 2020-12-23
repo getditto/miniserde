@@ -6,14 +6,14 @@
 //! ## Serializing a primitive
 //!
 //! ```rust
-//! use miniserde::ser::{Fragment, Serialize};
+//! use miniserde::ser::{ValueView, Serialize};
 //!
 //! // The data structure that we want to serialize as a primitive.
 //! struct MyBoolean(bool);
 //!
 //! impl Serialize for MyBoolean {
-//!     fn begin(&self) -> Fragment {
-//!         Fragment::Bool(self.0)
+//!     fn begin(&self) -> ValueView {
+//!         ValueView::Bool(self.0)
 //!     }
 //! }
 //! ```
@@ -21,14 +21,14 @@
 //! ## Serializing a sequence
 //!
 //! ```rust
-//! use miniserde::ser::{Fragment, Seq, Serialize};
+//! use miniserde::ser::{ValueView, Seq, Serialize};
 //!
 //! // Some custom sequence type that we want to serialize.
 //! struct MyVec<T>(Vec<T>);
 //!
 //! impl<T: Serialize> Serialize for MyVec<T> {
-//!     fn begin(&self) -> Fragment {
-//!         Fragment::Seq(Box::new(SliceStream { iter: self.0.iter() }))
+//!     fn begin(&self) -> ValueView {
+//!         ValueView::Seq(Box::new(SliceStream { iter: self.0.iter() }))
 //!     }
 //! }
 //!
@@ -50,7 +50,7 @@
 //! `#[derive(Serialize)]`.
 //!
 //! ```rust
-//! use miniserde::ser::{Fragment, Map, Serialize};
+//! use miniserde::ser::{ValueView, Map, Serialize};
 //! use std::borrow::Cow;
 //!
 //! // The struct that we would like to serialize.
@@ -60,8 +60,8 @@
 //! }
 //!
 //! impl Serialize for Demo {
-//!     fn begin(&self) -> Fragment {
-//!         Fragment::Map(Box::new(DemoStream {
+//!     fn begin(&self) -> ValueView {
+//!         ValueView::Map(Box::new(DemoStream {
 //!             data: self,
 //!             state: 0,
 //!         }))
@@ -93,7 +93,7 @@ use std::borrow::Cow;
 /// One unit of output produced during serialization.
 ///
 /// [Refer to the module documentation for examples.][::ser]
-pub enum Fragment<'a> {
+pub enum ValueView<'a> {
     Null,
     Bool(bool),
     Str(Cow<'a, str>),
@@ -108,7 +108,7 @@ pub enum Fragment<'a> {
 ///
 /// [Refer to the module documentation for examples.][::ser]
 pub trait Serialize {
-    fn begin(&self) -> Fragment;
+    fn begin(&self) -> ValueView;
 }
 
 /// Trait that can iterate elements of a sequence.
