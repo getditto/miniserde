@@ -168,6 +168,8 @@ pub use ::derives::*;
 #[path = "export.rs"]
 pub mod __private;
 
+mod aliased_box;
+
 #[macro_use]
 mod careful;
 

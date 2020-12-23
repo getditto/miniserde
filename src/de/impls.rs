@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::hash::{BuildHasher, Hash};
 use std::str::FromStr;
 
+use crate::aliased_box::AliasedBox;
 use crate::de::{Deserialize, Map, Seq, Visitor};
 use crate::error::{Error, Result};
 use crate::Place;
@@ -175,30 +176,35 @@ impl<T: Deserialize> Deserialize for Box<T> {
             }
 
             fn seq(&mut self) -> Result<Box<dyn Seq + '_>> {
-                let mut value = Box::new(None);
-                let ptr = careful!(&mut *value as &mut Option<T>);
+                let heap_slot = AliasedBox::from(Box::new(None));
+                let at_slot = unsafe {
+                    &mut *heap_slot.ptr()
+                };
                 Ok(Box::new(BoxSeq {
                     out: &mut self.out,
-                    value,
-                    seq: Deserialize::begin(ptr).seq()?,
+                    heap_slot,
+                    seq: Deserialize::begin(at_slot).seq()?,
                 }))
             }
 
             fn map(&mut self) -> Result<Box<dyn Map + '_>> {
-                let mut value = Box::new(None);
-                let ptr = careful!(&mut *value as &mut Option<T>);
+                let heap_slot = AliasedBox::from(Box::new(None));
+                let at_slot = unsafe {
+                    &mut *heap_slot.ptr()
+                };
                 Ok(Box::new(BoxMap {
                     out: &mut self.out,
-                    value,
-                    map: Deserialize::begin(ptr).map()?,
+                    heap_slot,
+                    map: Deserialize::begin(at_slot).map()?,
                 }))
             }
         }
 
         struct BoxSeq<'a, T: 'a> {
             out: &'a mut Option<Box<T>>,
-            value: Box<Option<T>>,
+            // Safety: refers to `heap_slot`, so it must be dropped before it.
             seq: Box<dyn Seq + 'a>,
+            heap_slot: AliasedBox<Option<T>>,
         }
 
         impl<'a, T: Deserialize> Seq for BoxSeq<'a, T> {
@@ -208,15 +214,16 @@ impl<T: Deserialize> Deserialize for Box<T> {
 
             fn finish(self: Box<Self>) -> Result<()> {
                 self.seq.finish()?;
-                *self.out = Some(Box::new(self.value.unwrap()));
+                *self.out = Some(Box::new(self.heap_slot.assume_unique().unwrap()));
                 Ok(())
             }
         }
 
         struct BoxMap<'a, T: 'a> {
             out: &'a mut Option<Box<T>>,
-            value: Box<Option<T>>,
+            // Safety: refers to `heap_slot`, so it must be dropped before it.
             map: Box<dyn Map + 'a>,
+            heap_slot: AliasedBox<Option<T>>,
         }
 
         impl<'a, T: Deserialize> Map for BoxMap<'a, T> {
@@ -226,7 +233,7 @@ impl<T: Deserialize> Deserialize for Box<T> {
 
             fn finish(self: Box<Self>) -> Result<()> {
                 self.map.finish()?;
-                *self.out = Some(Box::new(self.value.unwrap()));
+                *self.out = Some(Box::new(self.heap_slot.assume_unique().unwrap()));
                 Ok(())
             }
         }
