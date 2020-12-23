@@ -48,7 +48,7 @@ impl Seq for Ignore {
         Ok(Visitor::ignore())
     }
 
-    fn finish(&mut self) -> Result<()> {
+    fn finish(self: Box<Self>) -> Result<()> {
         Ok(())
     }
 }
@@ -58,7 +58,7 @@ impl Map for Ignore {
         Ok(Visitor::ignore())
     }
 
-    fn finish(&mut self) -> Result<()> {
+    fn finish(self: Box<Self>) -> Result<()> {
         Ok(())
     }
 }

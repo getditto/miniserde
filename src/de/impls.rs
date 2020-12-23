@@ -1,6 +1,5 @@
 use std::collections::{BTreeMap, HashMap};
 use std::hash::{BuildHasher, Hash};
-use std::mem;
 use std::str::FromStr;
 
 use crate::de::{Deserialize, Map, Seq, Visitor};
@@ -207,9 +206,9 @@ impl<T: Deserialize> Deserialize for Box<T> {
                 self.seq.element()
             }
 
-            fn finish(&mut self) -> Result<()> {
+            fn finish(self: Box<Self>) -> Result<()> {
                 self.seq.finish()?;
-                *self.out = Some(Box::new(self.value.take().unwrap()));
+                *self.out = Some(Box::new(self.value.unwrap()));
                 Ok(())
             }
         }
@@ -225,9 +224,9 @@ impl<T: Deserialize> Deserialize for Box<T> {
                 self.map.key(k)
             }
 
-            fn finish(&mut self) -> Result<()> {
+            fn finish(self: Box<Self>) -> Result<()> {
                 self.map.finish()?;
-                *self.out = Some(Box::new(self.value.take().unwrap()));
+                *self.out = Some(Box::new(self.value.unwrap()));
                 Ok(())
             }
         }
@@ -315,8 +314,8 @@ impl<A: Deserialize, B: Deserialize> Deserialize for (A, B) {
                 }
             }
 
-            fn finish(&mut self) -> Result<()> {
-                if let (Some(a), Some(b)) = (self.tuple.0.take(), self.tuple.1.take()) {
+            fn finish(self: Box<Self>) -> Result<()> {
+                if let (Some(a), Some(b)) = (self.tuple.0, self.tuple.1) {
                     *self.out = Some((a, b));
                     Ok(())
                 } else {
@@ -361,9 +360,9 @@ impl<T: Deserialize> Deserialize for Vec<T> {
                 Ok(Deserialize::begin(&mut self.element))
             }
 
-            fn finish(&mut self) -> Result<()> {
+            fn finish(mut self: Box<Self>) -> Result<()> {
                 self.shift();
-                *self.out = Some(mem::replace(&mut self.vec, Vec::new()));
+                *self.out = Some(self.vec);
                 Ok(())
             }
         }
@@ -425,10 +424,9 @@ where
                 Ok(Deserialize::begin(&mut self.value))
             }
 
-            fn finish(&mut self) -> Result<()> {
+            fn finish(mut self: Box<Self>) -> Result<()> {
                 self.shift();
-                let substitute = HashMap::with_hasher(H::default());
-                *self.out = Some(mem::replace(&mut self.map, substitute));
+                *self.out = Some(self.map);
                 Ok(())
             }
         }
@@ -475,9 +473,9 @@ impl<K: FromStr + Ord, V: Deserialize> Deserialize for BTreeMap<K, V> {
                 Ok(Deserialize::begin(&mut self.value))
             }
 
-            fn finish(&mut self) -> Result<()> {
+            fn finish(mut self: Box<Self>) -> Result<()> {
                 self.shift();
-                *self.out = Some(mem::replace(&mut self.map, BTreeMap::new()));
+                *self.out = Some(self.map);
                 Ok(())
             }
         }
