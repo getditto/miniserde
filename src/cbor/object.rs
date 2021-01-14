@@ -5,25 +5,26 @@ use std::mem::{self, ManuallyDrop};
 use std::ops::{Deref, DerefMut};
 use std::ptr;
 
-use crate::json::{drop, Value};
+use super::{drop, Value};
 use crate::private;
 use crate::ser::{self, Serialize, ValueView};
 
-/// A `BTreeMap<String, Value>` with a non-recursive drop impl.
+/// A `BTreeMap<Value, Value>` with a non-recursive drop impl.
 #[derive(Clone, Debug, Default)]
 pub struct Object {
-    inner: BTreeMap<String, Value>,
+    inner: BTreeMap<Value, Value>,
 }
 
 impl Drop for Object {
     fn drop(&mut self) {
-        for (_, child) in mem::replace(&mut self.inner, BTreeMap::new()) {
+        for (key, child) in mem::replace(&mut self.inner, BTreeMap::new()) {
+            drop::safely(key);
             drop::safely(child);
         }
     }
 }
 
-fn take(object: Object) -> BTreeMap<String, Value> {
+fn take(object: Object) -> BTreeMap<Value, Value> {
     let object = ManuallyDrop::new(object);
     unsafe { ptr::read(&object.inner) }
 }
@@ -37,7 +38,7 @@ impl Object {
 }
 
 impl Deref for Object {
-    type Target = BTreeMap<String, Value>;
+    type Target = BTreeMap<Value, Value>;
 
     fn deref(&self) -> &Self::Target {
         &self.inner
@@ -51,8 +52,8 @@ impl DerefMut for Object {
 }
 
 impl IntoIterator for Object {
-    type Item = (String, Value);
-    type IntoIter = <BTreeMap<String, Value> as IntoIterator>::IntoIter;
+    type Item = (Value, Value);
+    type IntoIter = <BTreeMap<Value, Value> as IntoIterator>::IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
         take(self).into_iter()
@@ -60,8 +61,8 @@ impl IntoIterator for Object {
 }
 
 impl<'a> IntoIterator for &'a Object {
-    type Item = (&'a String, &'a Value);
-    type IntoIter = <&'a BTreeMap<String, Value> as IntoIterator>::IntoIter;
+    type Item = (&'a Value, &'a Value);
+    type IntoIter = <&'a BTreeMap<Value, Value> as IntoIterator>::IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
@@ -69,18 +70,18 @@ impl<'a> IntoIterator for &'a Object {
 }
 
 impl<'a> IntoIterator for &'a mut Object {
-    type Item = (&'a String, &'a mut Value);
-    type IntoIter = <&'a mut BTreeMap<String, Value> as IntoIterator>::IntoIter;
+    type Item = (&'a Value, &'a mut Value);
+    type IntoIter = <&'a mut BTreeMap<Value, Value> as IntoIterator>::IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter_mut()
     }
 }
 
-impl FromIterator<(String, Value)> for Object {
+impl FromIterator<(Value, Value)> for Object {
     fn from_iter<I>(iter: I) -> Self
     where
-        I: IntoIterator<Item = (String, Value)>,
+        I: IntoIterator<Item = (Value, Value)>,
     {
         Object {
             inner: BTreeMap::from_iter(iter),
@@ -89,13 +90,13 @@ impl FromIterator<(String, Value)> for Object {
 }
 
 impl private {
-    pub fn stream_json_object(object: &Object) -> ValueView<'_> {
-        struct ObjectIter<'a>(btree_map::Iter<'a, String, Value>);
+    pub fn stream_cbor_object(object: &Object) -> ValueView<'_> {
+        struct ObjectIter<'a>(btree_map::Iter<'a, Value, Value>);
 
         impl<'a> ser::Map<'a> for ObjectIter<'a> {
             fn next(&mut self) -> Option<(Cow<'a, [u8]>, &'a dyn Serialize)> {
                 let (k, v) = self.0.next()?;
-                Some((Cow::Borrowed(k.as_bytes()), v as &dyn Serialize))
+                Some((Cow::Owned(super::to_vec(k).unwrap()), v as &dyn Serialize))
             }
 
             fn remaining(&self) -> usize {

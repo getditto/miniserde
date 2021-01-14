@@ -4,7 +4,7 @@ use std::hash::{BuildHasher, Hash};
 use std::slice;
 
 use crate::private;
-use crate::ser::{ValueView, Map, Seq, Serialize};
+use crate::ser::{Map, Seq, Serialize, ValueView};
 
 impl Serialize for () {
     fn begin(&self) -> ValueView<'_> {
@@ -34,7 +34,7 @@ macro_rules! unsigned {
     ($ty:ident) => {
         impl Serialize for $ty {
             fn begin(&self) -> ValueView<'_> {
-                ValueView::U64(*self as u64)
+                ValueView::Int(*self as _)
             }
         }
     };
@@ -49,7 +49,7 @@ macro_rules! signed {
     ($ty:ident) => {
         impl Serialize for $ty {
             fn begin(&self) -> ValueView<'_> {
-                ValueView::I64(*self as i64)
+                ValueView::Int(*self as _)
             }
         }
     };
@@ -117,6 +117,10 @@ impl<A: Serialize, B: Serialize> Serialize for (A, B) {
                     _ => None,
                 }
             }
+
+            fn remaining(&self) -> usize {
+                2
+            }
         }
 
         ValueView::Seq(Box::new(TupleStream {
@@ -149,9 +153,13 @@ where
         struct HashMapStream<'a, K: 'a, V: 'a>(hash_map::Iter<'a, K, V>);
 
         impl<'a, K: ToString, V: Serialize> Map<'a> for HashMapStream<'a, K, V> {
-            fn next(&mut self) -> Option<(Cow<'a, str>, &'a dyn Serialize)> {
+            fn next(&mut self) -> Option<(Cow<'a, [u8]>, &'a dyn Serialize)> {
                 let (k, v) = self.0.next()?;
-                Some((Cow::Owned(k.to_string()), v as &dyn Serialize))
+                Some((Cow::Owned(k.to_string().into()), v as &dyn Serialize))
+            }
+
+            fn remaining(&self) -> usize {
+                self.0.len()
             }
         }
 
@@ -174,6 +182,10 @@ impl private {
                 let element = self.0.next()?;
                 Some(element)
             }
+
+            fn remaining(&self) -> usize {
+                self.0.len()
+            }
         }
 
         ValueView::Seq(Box::new(SliceStream(slice.iter())))
@@ -183,9 +195,13 @@ impl private {
         struct BTreeMapStream<'a, K: 'a, V: 'a>(btree_map::Iter<'a, K, V>);
 
         impl<'a, K: ToString, V: Serialize> Map<'a> for BTreeMapStream<'a, K, V> {
-            fn next(&mut self) -> Option<(Cow<'a, str>, &'a dyn Serialize)> {
+            fn next(&mut self) -> Option<(Cow<'a, [u8]>, &'a dyn Serialize)> {
                 let (k, v) = self.0.next()?;
-                Some((Cow::Owned(k.to_string()), v as &dyn Serialize))
+                Some((Cow::Owned(k.to_string().into()), v as &dyn Serialize))
+            }
+
+            fn remaining(&self) -> usize {
+                self.0.len()
             }
         }
 

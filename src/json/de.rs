@@ -71,12 +71,8 @@ fn from_str_impl(j: &str, mut visitor: &mut dyn Visitor) -> Result<()> {
                 visitor.boolean(b)?;
                 None
             }
-            Negative(n) => {
-                visitor.negative(n)?;
-                None
-            }
-            Nonnegative(n) => {
-                visitor.nonnegative(n)?;
+            Int(i) => {
+                visitor.int(i)?;
                 None
             }
             Float(n) => {
@@ -157,7 +153,7 @@ fn from_str_impl(j: &str, mut visitor: &mut dyn Visitor) -> Result<()> {
                 }
                 let inner = {
                     let k = de.parse_str()?;
-                    careful!(map.key(k)? as &mut dyn Visitor)
+                    careful!(map.key(k.as_bytes())? as &mut dyn Visitor)
                 };
                 match de.parse_whitespace() {
                     Some(b':') => de.bump(),
@@ -179,8 +175,7 @@ enum Event<'a> {
     Null,
     Bool(bool),
     Str(&'a str),
-    Negative(i64),
-    Nonnegative(u64),
+    Int(i128),
     Float(f64),
     SeqStart,
     MapStart,
@@ -459,20 +454,11 @@ impl<'a, 'b> Deserializer<'a, 'b> {
         match self.peek_or_nul() {
             b'.' => self.parse_decimal(nonnegative, significand, 0).map(Float),
             b'e' | b'E' => self.parse_exponent(nonnegative, significand, 0).map(Float),
-            _ => {
-                Ok(if nonnegative {
-                    Nonnegative(significand)
-                } else {
-                    let neg = (significand as i64).wrapping_neg();
-
-                    // Convert into a float if we underflow.
-                    if neg > 0 {
-                        Float(-(significand as f64))
-                    } else {
-                        Negative(neg)
-                    }
-                })
-            }
+            _ => Ok(if nonnegative {
+                Int(significand as i128)
+            } else {
+                Int(-(significand as i128))
+            }),
         }
     }
 

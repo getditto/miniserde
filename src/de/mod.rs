@@ -149,7 +149,7 @@
 //! }
 //!
 //! impl<'a> Map for DemoBuilder<'a> {
-//!     fn key(&mut self, k: &str) -> Result<&mut dyn Visitor> {
+//!     fn key(&mut self, k: &[u8]) -> Result<&mut dyn Visitor> {
 //!         // Figure out which field is being deserialized and return a place
 //!         // to write it.
 //!         //
@@ -220,33 +220,29 @@ pub trait Deserialize: Sized {
 /// Trait that can write data into an output place.
 ///
 /// [Refer to the module documentation for examples.][crate::de]
+#[allow(unused_variables)]
 pub trait Visitor {
     fn null(&mut self) -> Result<()> {
         Err(Error)
     }
 
     fn boolean(&mut self, b: bool) -> Result<()> {
-        let _ = b;
         Err(Error)
     }
 
     fn string(&mut self, s: &str) -> Result<()> {
-        let _ = s;
         Err(Error)
     }
 
-    fn negative(&mut self, n: i64) -> Result<()> {
-        let _ = n;
+    fn bytes(&mut self, s: &[u8]) -> Result<()> {
         Err(Error)
     }
 
-    fn nonnegative(&mut self, n: u64) -> Result<()> {
-        let _ = n;
+    fn int(&mut self, i: i128) -> Result<()> {
         Err(Error)
     }
 
     fn float(&mut self, n: f64) -> Result<()> {
-        let _ = n;
         Err(Error)
     }
 
@@ -271,6 +267,14 @@ pub trait Seq {
 ///
 /// [Refer to the module documentation for examples.][crate::de]
 pub trait Map {
-    fn key(&mut self, k: &str) -> Result<&mut dyn Visitor>;
+    fn key(&mut self, k: &[u8]) -> Result<&mut dyn Visitor>;
     fn finish(self: Box<Self>) -> Result<()>;
 }
+
+// impl dyn Map + '_ {
+//     #[inline]
+//     pub fn key(&mut self, k: &(impl ?Sized + AsRef<[u8]>)) -> Result<&mut dyn Visitor>
+//     {
+//         self.key(k.as_ref())
+//     }
+// }

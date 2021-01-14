@@ -179,6 +179,7 @@ mod place;
 mod error;
 mod ignore;
 
+pub mod cbor;
 pub mod de;
 pub mod json;
 pub mod ser;
