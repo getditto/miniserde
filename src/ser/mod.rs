@@ -97,8 +97,8 @@ pub enum ValueView<'a> {
     Null,
     Bool(bool),
     Str(Cow<'a, str>),
-    U64(u64),
-    I64(i64),
+    Bytes(Cow<'a, [u8]>),
+    Int(i128),
     F64(f64),
     Seq(Box<dyn Seq<'a> + 'a>),
     Map(Box<dyn Map<'a> + 'a>),
@@ -116,11 +116,13 @@ pub trait Serialize {
 /// [Refer to the module documentation for examples.][crate::ser]
 pub trait Seq<'view> {
     fn next(&mut self) -> Option<&'view dyn Serialize>;
+    fn remaining(&self) -> usize;
 }
 
 /// Trait that can iterate key-value entries of a map or struct.
 ///
 /// [Refer to the module documentation for examples.][crate::ser]
 pub trait Map<'view> {
-    fn next(&mut self) -> Option<(Cow<'view, str>, &'view dyn Serialize)>;
+    fn next(&mut self) -> Option<(Cow<'view, [u8]>, &'view dyn Serialize)>;
+    fn remaining(&self) -> usize;
 }

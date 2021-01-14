@@ -48,22 +48,14 @@ macro_rules! signed {
         impl Deserialize for $ty {
             fn begin(out: &mut Option<Self>) -> &mut dyn Visitor {
                 impl Visitor for Place<$ty> {
-                    fn negative(&mut self, n: i64) -> Result<()> {
-                        if n >= $ty::min_value() as i64 {
-                            self.out = Some(n as $ty);
-                            Ok(())
-                        } else {
-                            Err(Error)
-                        }
-                    }
-
-                    fn nonnegative(&mut self, n: u64) -> Result<()> {
-                        if n <= $ty::max_value() as u64 {
-                            self.out = Some(n as $ty);
-                            Ok(())
-                        } else {
-                            Err(Error)
-                        }
+                    fn int(&mut self, i: i128) -> Result<()> {
+                        const MIN: i128 = ::core::$ty::MIN as _;
+                        const MAX: i128 = ::core::$ty::MAX as _;
+                        self.out = Some(match i {
+                            MIN..=MAX => i as _,
+                            _ => return Err(Error),
+                        });
+                        Ok(())
                     }
                 }
                 Place::new(out)
@@ -82,9 +74,9 @@ macro_rules! unsigned {
         impl Deserialize for $ty {
             fn begin(out: &mut Option<Self>) -> &mut dyn Visitor {
                 impl Visitor for Place<$ty> {
-                    fn nonnegative(&mut self, n: u64) -> Result<()> {
-                        if n <= $ty::max_value() as u64 {
-                            self.out = Some(n as $ty);
+                    fn int(&mut self, i: i128) -> Result<()> {
+                        if 0 <= i && i <= $ty::max_value() as i128 {
+                            self.out = Some(i as $ty);
                             Ok(())
                         } else {
                             Err(Error)
@@ -107,18 +99,13 @@ macro_rules! float {
         impl Deserialize for $ty {
             fn begin(out: &mut Option<Self>) -> &mut dyn Visitor {
                 impl Visitor for Place<$ty> {
-                    fn negative(&mut self, n: i64) -> Result<()> {
-                        self.out = Some(n as $ty);
+                    fn int(&mut self, i: i128) -> Result<()> {
+                        self.out = Some(i as $ty);
                         Ok(())
                     }
 
-                    fn nonnegative(&mut self, n: u64) -> Result<()> {
-                        self.out = Some(n as $ty);
-                        Ok(())
-                    }
-
-                    fn float(&mut self, n: f64) -> Result<()> {
-                        self.out = Some(n as $ty);
+                    fn float(&mut self, f: f64) -> Result<()> {
+                        self.out = Some(f as $ty);
                         Ok(())
                     }
                 }
@@ -154,16 +141,9 @@ impl<T: Deserialize> Deserialize for Box<T> {
                 Ok(())
             }
 
-            fn negative(&mut self, n: i64) -> Result<()> {
+            fn int(&mut self, i: i128) -> Result<()> {
                 let mut out = None;
-                Deserialize::begin(&mut out).negative(n)?;
-                self.out = Some(Box::new(out.unwrap()));
-                Ok(())
-            }
-
-            fn nonnegative(&mut self, n: u64) -> Result<()> {
-                let mut out = None;
-                Deserialize::begin(&mut out).nonnegative(n)?;
+                Deserialize::begin(&mut out).int(i)?;
                 self.out = Some(Box::new(out.unwrap()));
                 Ok(())
             }
@@ -177,9 +157,7 @@ impl<T: Deserialize> Deserialize for Box<T> {
 
             fn seq(&mut self) -> Result<Box<dyn Seq + '_>> {
                 let heap_slot = AliasedBox::from(Box::new(None));
-                let at_slot = unsafe {
-                    &mut *heap_slot.ptr()
-                };
+                let at_slot = unsafe { &mut *heap_slot.ptr() };
                 Ok(Box::new(BoxSeq {
                     out: &mut self.out,
                     heap_slot,
@@ -189,9 +167,7 @@ impl<T: Deserialize> Deserialize for Box<T> {
 
             fn map(&mut self) -> Result<Box<dyn Map + '_>> {
                 let heap_slot = AliasedBox::from(Box::new(None));
-                let at_slot = unsafe {
-                    &mut *heap_slot.ptr()
-                };
+                let at_slot = unsafe { &mut *heap_slot.ptr() };
                 Ok(Box::new(BoxMap {
                     out: &mut self.out,
                     heap_slot,
@@ -227,7 +203,7 @@ impl<T: Deserialize> Deserialize for Box<T> {
         }
 
         impl<'a, T: Deserialize> Map for BoxMap<'a, T> {
-            fn key(&mut self, k: &str) -> Result<&mut dyn Visitor> {
+            fn key(&mut self, k: &[u8]) -> Result<&mut dyn Visitor> {
                 self.map.key(k)
             }
 
@@ -264,14 +240,9 @@ impl<T: Deserialize> Deserialize for Option<T> {
                 Deserialize::begin(self.out.as_mut().unwrap()).string(s)
             }
 
-            fn negative(&mut self, n: i64) -> Result<()> {
+            fn int(&mut self, i: i128) -> Result<()> {
                 self.out = Some(None);
-                Deserialize::begin(self.out.as_mut().unwrap()).negative(n)
-            }
-
-            fn nonnegative(&mut self, n: u64) -> Result<()> {
-                self.out = Some(None);
-                Deserialize::begin(self.out.as_mut().unwrap()).nonnegative(n)
+                Deserialize::begin(self.out.as_mut().unwrap()).int(i)
             }
 
             fn float(&mut self, n: f64) -> Result<()> {
@@ -422,7 +393,8 @@ where
             V: Deserialize,
             H: BuildHasher + Default,
         {
-            fn key(&mut self, k: &str) -> Result<&mut dyn Visitor> {
+            fn key(&mut self, k: &[u8]) -> Result<&mut dyn Visitor> {
+                let k = ::core::str::from_utf8(k).map_err(|_| crate::Error)?;
                 self.shift();
                 self.key = Some(match K::from_str(k) {
                     Ok(key) => key,
@@ -471,7 +443,8 @@ impl<K: FromStr + Ord, V: Deserialize> Deserialize for BTreeMap<K, V> {
         }
 
         impl<'a, K: FromStr + Ord, V: Deserialize> Map for MapBuilder<'a, K, V> {
-            fn key(&mut self, k: &str) -> Result<&mut dyn Visitor> {
+            fn key(&mut self, k: &[u8]) -> Result<&mut dyn Visitor> {
+                let k = ::core::str::from_utf8(k).map_err(|_| crate::Error)?;
                 self.shift();
                 self.key = Some(match K::from_str(k) {
                     Ok(key) => key,

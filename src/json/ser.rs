@@ -1,4 +1,4 @@
-use crate::ser::{ValueView, Map, Seq, Serialize};
+use crate::ser::{Map, Seq, Serialize, ValueView};
 
 /// Serialize any serializable type into a JSON string.
 ///
@@ -21,31 +21,13 @@ use crate::ser::{ValueView, Map, Seq, Serialize};
 ///     println!("{}", j);
 /// }
 /// ```
-pub fn to_string<T: ?Sized + Serialize>(value: &T) -> String {
-    to_string_impl(&value)
-}
-
-struct Serializer<'a> {
-    stack: Vec<Layer<'a>>,
-}
-
-enum Layer<'a> {
-    Seq(Box<dyn Seq<'a> + 'a>),
-    Map(Box<dyn Map<'a> + 'a>),
-}
-
-impl<'a> Drop for Serializer<'a> {
-    fn drop(&mut self) {
-        // Drop layers in reverse order.
-        while !self.stack.is_empty() {
-            self.stack.pop();
-        }
-    }
-}
-
-fn to_string_impl(value: &dyn Serialize) -> String {
+pub fn to_string<'value>(value: &'value dyn Serialize) -> crate::Result<String> {
     let mut out = String::new();
-    let mut serializer = Serializer { stack: Vec::new() };
+    let mut stack: Vec<Layer<'value>> = vec![];
+    enum Layer<'value> {
+        Seq(Box<dyn Seq<'value> + 'value>),
+        Map(Box<dyn Map<'value> + 'value>),
+    }
     let mut fragment = value.begin();
 
     loop {
@@ -53,8 +35,32 @@ fn to_string_impl(value: &dyn Serialize) -> String {
             ValueView::Null => out.push_str("null"),
             ValueView::Bool(b) => out.push_str(if b { "true" } else { "false" }),
             ValueView::Str(s) => escape_str(&s, &mut out),
-            ValueView::U64(n) => out.push_str(itoa::Buffer::new().format(n)),
-            ValueView::I64(n) => out.push_str(itoa::Buffer::new().format(n)),
+            ValueView::Bytes(bs) => {
+                out.push('[');
+                let mut bytes = bs.iter().copied();
+                if let Some(fst) = bytes.next() {
+                    fn fmt_byte<'buf>(mut byte: u8, buf: &'buf mut [u8; 3]) -> &'buf str {
+                        if byte == 0 {
+                            return "0";
+                        }
+                        let mut cursor = 3;
+                        while byte > 0 {
+                            cursor -= 1;
+                            buf[cursor] = b'0' + byte % 10;
+                            byte /= 10;
+                        }
+                        ::core::str::from_utf8(&buf[cursor..]).unwrap()
+                    };
+                    let ref mut buf = [0; 3];
+                    out.push_str(fmt_byte(fst, buf));
+                    bytes.for_each(|b| {
+                        out.push(',');
+                        out.push_str(fmt_byte(b, buf));
+                    });
+                }
+                out.push(']');
+            }
+            ValueView::Int(i) => out.push_str(itoa::Buffer::new().format(i)),
             ValueView::F64(n) => {
                 if n.is_finite() {
                     out.push_str(ryu::Buffer::new().format_finite(n))
@@ -64,10 +70,9 @@ fn to_string_impl(value: &dyn Serialize) -> String {
             }
             ValueView::Seq(mut seq) => {
                 out.push('[');
-                // invariant: `seq` must outlive `first`
                 match seq.next() {
                     Some(first) => {
-                        serializer.stack.push(Layer::Seq(seq));
+                        stack.push(Layer::Seq(seq));
                         fragment = first.begin();
                         continue;
                     }
@@ -76,12 +81,12 @@ fn to_string_impl(value: &dyn Serialize) -> String {
             }
             ValueView::Map(mut map) => {
                 out.push('{');
-                // invariant: `map` must outlive `first`
                 match map.next() {
-                    Some((key, first)) => {
-                        escape_str(&key, &mut out);
+                    Some((ref key, first)) => {
+                        let key = ::core::str::from_utf8(key).map_err(|_| crate::Error)?;
+                        escape_str(key, &mut out);
                         out.push(':');
-                        serializer.stack.push(Layer::Map(map));
+                        stack.push(Layer::Map(map));
                         fragment = first.begin();
                         continue;
                     }
@@ -91,34 +96,29 @@ fn to_string_impl(value: &dyn Serialize) -> String {
         }
 
         loop {
-            match serializer.stack.last_mut() {
-                Some(Layer::Seq(seq)) => {
-                    // invariant: `seq` must outlive `next`
-                    match seq.next() {
-                        Some(next) => {
-                            out.push(',');
-                            fragment = next.begin();
-                            break;
-                        }
-                        None => out.push(']'),
+            match stack.last_mut() {
+                Some(Layer::Seq(seq)) => match seq.next() {
+                    Some(next) => {
+                        out.push(',');
+                        fragment = next.begin();
+                        break;
                     }
-                }
-                Some(Layer::Map(map)) => {
-                    // invariant: `map` must outlive `next`
-                    match map.next() {
-                        Some((key, next)) => {
-                            out.push(',');
-                            escape_str(&key, &mut out);
-                            out.push(':');
-                            fragment = next.begin();
-                            break;
-                        }
-                        None => out.push('}'),
+                    None => out.push(']'),
+                },
+                Some(Layer::Map(map)) => match map.next() {
+                    Some((ref key, next)) => {
+                        let key = ::core::str::from_utf8(key).map_err(|_| crate::Error)?;
+                        out.push(',');
+                        escape_str(key, &mut out);
+                        out.push(':');
+                        fragment = next.begin();
+                        break;
                     }
-                }
-                None => return out,
+                    None => out.push('}'),
+                },
+                None => return Ok(out),
             }
-            serializer.stack.pop();
+            stack.pop();
         }
     }
 }

@@ -22,11 +22,7 @@ impl Visitor for Ignore {
         Ok(())
     }
 
-    fn negative(&mut self, _n: i64) -> Result<()> {
-        Ok(())
-    }
-
-    fn nonnegative(&mut self, _n: u64) -> Result<()> {
+    fn int(&mut self, _: i128) -> Result<()> {
         Ok(())
     }
 
@@ -54,7 +50,7 @@ impl Seq for Ignore {
 }
 
 impl Map for Ignore {
-    fn key(&mut self, _k: &str) -> Result<&mut dyn Visitor> {
+    fn key(&mut self, _k: &[u8]) -> Result<&mut dyn Visitor> {
         Ok(Visitor::ignore())
     }
 

@@ -11,6 +11,6 @@ fn test_round_trip_deeply_nested() {
     }
 
     let value: Value = json::from_str(&j).unwrap();
-    let j2 = json::to_string(&value);
+    let j2 = json::to_string(&value).unwrap();
     assert_eq!(j, j2);
 }

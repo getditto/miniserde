@@ -4,7 +4,7 @@ use crate::de::{Deserialize, Map, Seq, Visitor};
 use crate::error::Result;
 use crate::json::{Array, Number, Object};
 use crate::private;
-use crate::ser::{ValueView, Serialize};
+use crate::ser::{Serialize, ValueView};
 use crate::Place;
 
 /// Any valid JSON value.
@@ -45,12 +45,12 @@ impl Serialize for Value {
         match self {
             Value::Null => ValueView::Null,
             Value::Bool(b) => ValueView::Bool(*b),
-            Value::Number(Number::U64(n)) => ValueView::U64(*n),
-            Value::Number(Number::I64(n)) => ValueView::I64(*n),
-            Value::Number(Number::F64(n)) => ValueView::F64(*n),
+            &Value::Number(Number::U64(n)) => ValueView::Int(n as _),
+            &Value::Number(Number::I64(i)) => ValueView::Int(i as _),
+            &Value::Number(Number::F64(f)) => ValueView::F64(f),
             Value::String(s) => ValueView::Str(Cow::Borrowed(s)),
             Value::Array(array) => private::stream_slice(array),
-            Value::Object(object) => private::stream_object(object),
+            Value::Object(object) => private::stream_json_object(object),
         }
     }
 }
@@ -73,13 +73,15 @@ impl Deserialize for Value {
                 Ok(())
             }
 
-            fn negative(&mut self, n: i64) -> Result<()> {
-                self.out = Some(Value::Number(Number::I64(n)));
-                Ok(())
-            }
-
-            fn nonnegative(&mut self, n: u64) -> Result<()> {
-                self.out = Some(Value::Number(Number::U64(n)));
+            fn int(&mut self, i: i128) -> Result<()> {
+                use ::core::convert::TryFrom;
+                self.out = Some(Value::Number(if let Ok(u64) = u64::try_from(i) {
+                    Number::U64(u64)
+                } else if let Ok(i64) = i64::try_from(i) {
+                    Number::I64(i64)
+                } else {
+                    return Err(crate::Error);
+                }));
                 Ok(())
             }
 
@@ -149,7 +151,8 @@ impl Deserialize for Value {
         }
 
         impl<'a> Map for ObjectBuilder<'a> {
-            fn key(&mut self, k: &str) -> Result<&mut dyn Visitor> {
+            fn key(&mut self, k: &[u8]) -> Result<&mut dyn Visitor> {
+                let k = ::core::str::from_utf8(k).map_err(|_| crate::Error)?;
                 self.shift();
                 self.key = Some(k.to_owned());
                 Ok(Deserialize::begin(&mut self.value))
