@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::collections::{btree_map, BTreeMap};
 use std::iter::FromIterator;
 use std::mem::{self, ManuallyDrop};
@@ -94,9 +93,9 @@ impl private {
         struct ObjectIter<'a>(btree_map::Iter<'a, Value, Value>);
 
         impl<'a> ser::Map<'a> for ObjectIter<'a> {
-            fn next(&mut self) -> Option<(Cow<'a, [u8]>, &'a dyn Serialize)> {
+            fn next(&mut self) -> Option<(&'a dyn Serialize, &'a dyn Serialize)> {
                 let (k, v) = self.0.next()?;
-                Some((Cow::Owned(super::to_vec(k).unwrap()), v as &dyn Serialize))
+                Some((k, v))
             }
 
             fn remaining(&self) -> usize {

@@ -21,4 +21,8 @@ pub use self::array::Array;
 mod object;
 pub use self::object::Object;
 
+pub fn to_value<T: crate::Serialize>(v: T) -> crate::Result<Value> {
+    from_str(&to_string(&v)?)
+}
+
 mod drop;

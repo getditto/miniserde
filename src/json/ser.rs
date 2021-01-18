@@ -17,7 +17,7 @@ use crate::ser::{Map, Seq, Serialize, ValueView};
 ///         message: "reminiscent of Serde".to_owned(),
 ///     };
 ///
-///     let j = json::to_string(&example);
+///     let j = json::to_string(&example).unwrap();
 ///     println!("{}", j);
 /// }
 /// ```
@@ -82,8 +82,9 @@ pub fn to_string<'value>(value: &'value dyn Serialize) -> crate::Result<String> 
             ValueView::Map(mut map) => {
                 out.push('{');
                 match map.next() {
-                    Some((ref key, first)) => {
-                        let key = ::core::str::from_utf8(key).map_err(|_| crate::Error)?;
+                    Some((key, first)) => {
+                        let key = key.begin();
+                        let key = key.as_str().ok_or(crate::Error)?;
                         escape_str(key, &mut out);
                         out.push(':');
                         stack.push(Layer::Map(map));
@@ -106,8 +107,9 @@ pub fn to_string<'value>(value: &'value dyn Serialize) -> crate::Result<String> 
                     None => out.push(']'),
                 },
                 Some(Layer::Map(map)) => match map.next() {
-                    Some((ref key, next)) => {
-                        let key = ::core::str::from_utf8(key).map_err(|_| crate::Error)?;
+                    Some((key, next)) => {
+                        let key = key.begin();
+                        let key = key.as_str().ok_or(crate::Error)?;
                         out.push(',');
                         escape_str(key, &mut out);
                         out.push(':');

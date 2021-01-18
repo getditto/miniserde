@@ -120,7 +120,7 @@
 //!
 //! ```rust
 //! use miniserde_ditto::{make_place, Result};
-//! use miniserde_ditto::de::{Deserialize, Map, Visitor};
+//! use miniserde_ditto::de::{Deserialize, Map, StrKeyMap, Visitor};
 //!
 //! make_place!(Place);
 //!
@@ -148,8 +148,8 @@
 //!     out: &'a mut Option<Demo>,
 //! }
 //!
-//! impl<'a> Map for DemoBuilder<'a> {
-//!     fn key(&mut self, k: &[u8]) -> Result<&mut dyn Visitor> {
+//! impl<'a> StrKeyMap for DemoBuilder<'a> {
+//!     fn key(&mut self, k: &str) -> Result<&mut dyn Visitor> {
 //!         // Figure out which field is being deserialized and return a place
 //!         // to write it.
 //!         //
@@ -267,14 +267,33 @@ pub trait Seq {
 ///
 /// [Refer to the module documentation for examples.][crate::de]
 pub trait Map {
-    fn key(&mut self, k: &[u8]) -> Result<&mut dyn Visitor>;
+    fn val_with_key(
+        &mut self,
+        with_key: &mut dyn FnMut(Result<&mut dyn Visitor>) -> Result<()>,
+    ) -> Result<&mut dyn Visitor>;
     fn finish(self: Box<Self>) -> Result<()>;
 }
 
-// impl dyn Map + '_ {
-//     #[inline]
-//     pub fn key(&mut self, k: &(impl ?Sized + AsRef<[u8]>)) -> Result<&mut dyn Visitor>
-//     {
-//         self.key(k.as_ref())
-//     }
-// }
+pub trait StrKeyMap: Map {
+    fn key(&mut self, k: &str) -> Result<&mut dyn Visitor>;
+
+    fn finish(self: Box<Self>) -> Result<()>;
+}
+
+impl<T: StrKeyMap> Map for T {
+    fn val_with_key(
+        &mut self,
+        de_key: &mut dyn FnMut(Result<&mut dyn Visitor>) -> Result<()>,
+    ) -> Result<&mut dyn Visitor> {
+        let mut s = None::<String>;
+        de_key(Ok(Deserialize::begin(&mut s)))?;
+        match s.as_deref() {
+            Some(k) => self.key(k),
+            None => Err(crate::Error),
+        }
+    }
+
+    fn finish(self: Box<Self>) -> Result<()> {
+        StrKeyMap::finish(self)
+    }
+}

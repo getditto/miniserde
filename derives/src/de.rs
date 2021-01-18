@@ -32,9 +32,7 @@ pub fn derive_struct(input: &DeriveInput, fields: &FieldsNamed) -> Result<TokenS
     let fieldstr = fields
         .named
         .iter()
-        .map(|it| {
-            attr::name_of_field(it).map(|s| syn::LitByteStr::new(s.as_bytes(), Span::call_site()))
-        })
+        .map(attr::name_of_field)
         .collect::<Result<Vec<_>>>()?;
 
     let wrapper_generics = bound::with_lifetime_bound(&input.generics, "'__a");
@@ -64,7 +62,7 @@ pub fn derive_struct(input: &DeriveInput, fields: &FieldsNamed) -> Result<TokenS
 
             impl #impl_generics miniserde_ditto::de::Visitor for __Visitor #ty_generics #bounded_where_clause {
                 fn map(&mut self) -> miniserde_ditto::Result<miniserde_ditto::__private::Box<dyn miniserde_ditto::de::Map + '_>> {
-                    Ok(miniserde_ditto::__private::Box::new(__State {
+                    miniserde_ditto::__private::Ok(miniserde_ditto::__private::Box::new(__State {
                         #(
                             #fieldname: miniserde_ditto::Deserialize::default(),
                         )*
@@ -80,8 +78,8 @@ pub fn derive_struct(input: &DeriveInput, fields: &FieldsNamed) -> Result<TokenS
                 __out: &'__a mut miniserde_ditto::__private::Option<#ident #ty_generics>,
             }
 
-            impl #wrapper_impl_generics miniserde_ditto::de::Map for __State #wrapper_ty_generics #bounded_where_clause {
-                fn key(&mut self, __k: &[miniserde_ditto::__private::u8]) -> miniserde_ditto::Result<&mut dyn miniserde_ditto::de::Visitor> {
+            impl #wrapper_impl_generics miniserde_ditto::de::StrKeyMap for __State #wrapper_ty_generics #bounded_where_clause {
+                fn key(&mut self, __k: &miniserde_ditto::__private::str) -> miniserde_ditto::Result<&mut dyn miniserde_ditto::de::Visitor> {
                     match __k {
                         #(
                             #fieldstr => miniserde_ditto::__private::Ok(miniserde_ditto::Deserialize::begin(&mut self.#fieldname)),
