@@ -127,7 +127,7 @@ pub fn to_writer<'value>(
     while let Some(last) = stack.last_mut() {
         let view: ValueView<'value> = match last {
             &mut Layer::Single(value) => {
-                let view = value.begin();
+                let view = value.view();
                 drop(stack.pop());
                 view
             }

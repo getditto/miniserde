@@ -44,7 +44,7 @@ fn derive_struct(input: &DeriveInput, fields: &FieldsNamed) -> Result<TokenStrea
         #[allow(non_upper_case_globals)]
         const #dummy: () = {
             impl #impl_generics miniserde_ditto::Serialize for #ident #ty_generics #bounded_where_clause {
-                fn begin(&self) -> miniserde_ditto::ser::ValueView<'_> {
+                fn view(&self) -> miniserde_ditto::ser::ValueView<'_> {
                     miniserde_ditto::ser::ValueView::Map(miniserde_ditto::__private::Box::new(__Map {
                         data: self,
                         state: 0,
@@ -121,7 +121,7 @@ fn derive_enum(input: &DeriveInput, enumeration: &DataEnum) -> Result<TokenStrea
         #[allow(non_upper_case_globals)]
         const #dummy: () = {
             impl miniserde_ditto::Serialize for #ident {
-                fn begin(&self) -> miniserde_ditto::ser::ValueView<'_> {
+                fn view(&self) -> miniserde_ditto::ser::ValueView<'_> {
                     match self {
                         #(
                             #ident::#var_idents => {
