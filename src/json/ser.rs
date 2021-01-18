@@ -28,10 +28,10 @@ pub fn to_string<'value>(value: &'value dyn Serialize) -> crate::Result<String> 
         Seq(Box<dyn Seq<'value> + 'value>),
         Map(Box<dyn Map<'value> + 'value>),
     }
-    let mut fragment = value.begin();
+    let mut view = value.view();
 
     loop {
-        match fragment {
+        match view {
             ValueView::Null => out.push_str("null"),
             ValueView::Bool(b) => out.push_str(if b { "true" } else { "false" }),
             ValueView::Str(s) => escape_str(&s, &mut out),
@@ -73,7 +73,7 @@ pub fn to_string<'value>(value: &'value dyn Serialize) -> crate::Result<String> 
                 match seq.next() {
                     Some(first) => {
                         stack.push(Layer::Seq(seq));
-                        fragment = first.begin();
+                        view = first.view();
                         continue;
                     }
                     None => out.push(']'),
@@ -83,12 +83,12 @@ pub fn to_string<'value>(value: &'value dyn Serialize) -> crate::Result<String> 
                 out.push('{');
                 match map.next() {
                     Some((key, first)) => {
-                        let key = key.begin();
+                        let key = key.view();
                         let key = key.as_str().ok_or(crate::Error)?;
                         escape_str(key, &mut out);
                         out.push(':');
                         stack.push(Layer::Map(map));
-                        fragment = first.begin();
+                        view = first.view();
                         continue;
                     }
                     None => out.push('}'),
@@ -101,19 +101,19 @@ pub fn to_string<'value>(value: &'value dyn Serialize) -> crate::Result<String> 
                 Some(Layer::Seq(seq)) => match seq.next() {
                     Some(next) => {
                         out.push(',');
-                        fragment = next.begin();
+                        view = next.view();
                         break;
                     }
                     None => out.push(']'),
                 },
                 Some(Layer::Map(map)) => match map.next() {
                     Some((key, next)) => {
-                        let key = key.begin();
+                        let key = key.view();
                         let key = key.as_str().ok_or(crate::Error)?;
                         out.push(',');
                         escape_str(key, &mut out);
                         out.push(':');
-                        fragment = next.begin();
+                        view = next.view();
                         break;
                     }
                     None => out.push('}'),

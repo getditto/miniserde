@@ -104,7 +104,7 @@ impl Default for Value {
 }
 
 impl Serialize for Value {
-    fn begin(&self) -> ValueView<'_> {
+    fn view(&self) -> ValueView<'_> {
         match self {
             Value::Null => ValueView::Null,
             Value::Bool(b) => ValueView::Bool(*b),

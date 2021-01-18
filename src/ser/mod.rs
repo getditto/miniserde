@@ -12,7 +12,7 @@
 //! struct MyBoolean(bool);
 //!
 //! impl Serialize for MyBoolean {
-//!     fn begin(&self) -> ValueView {
+//!     fn view(&self) -> ValueView {
 //!         ValueView::Bool(self.0)
 //!     }
 //! }
@@ -27,7 +27,7 @@
 //! struct MyVec<T>(Vec<T>);
 //!
 //! impl<T: Serialize> Serialize for MyVec<T> {
-//!     fn begin(&self) -> ValueView {
+//!     fn view(&self) -> ValueView {
 //!         ValueView::Seq(Box::new(SliceStream { iter: self.0.iter() }))
 //!     }
 //! }
@@ -64,7 +64,7 @@
 //! }
 //!
 //! impl Serialize for Demo {
-//!     fn begin(&self) -> ValueView {
+//!     fn view(&self) -> ValueView {
 //!         ValueView::Map(Box::new(DemoStream {
 //!             data: self,
 //!             state: 0,
@@ -149,9 +149,9 @@ impl ValueView<'_> {
 ///
 /// [Refer to the module documentation for examples.][crate::ser]
 pub trait Serialize {
-    fn begin(&self) -> ValueView<'_>;
+    fn view(&self) -> ValueView<'_>;
 
-    fn begin_seq(seq: &'_ [Self]) -> ValueView<'_>
+    fn view_seq(seq: &'_ [Self]) -> ValueView<'_>
     where
         Self: Sized,
     {
