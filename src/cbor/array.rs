@@ -7,24 +7,22 @@ use super::{drop, Value};
 
 /// A `Vec<Value>` with a non-recursive drop impl.
 #[derive(Clone, Debug, Default)]
-pub struct Array {
-    inner: Vec<Value>,
-}
+pub struct Array(pub Vec<Value>);
 
 impl Drop for Array {
     fn drop(&mut self) {
-        self.inner.drain(..).for_each(drop::safely);
+        self.0.drain(..).for_each(drop::safely);
     }
 }
 
 fn take(array: Array) -> Vec<Value> {
     let array = ManuallyDrop::new(array);
-    unsafe { ptr::read(&array.inner) }
+    unsafe { ptr::read(&array.0) }
 }
 
 impl Array {
     pub fn new() -> Self {
-        Array { inner: Vec::new() }
+        Array { 0: Vec::new() }
     }
 }
 
@@ -32,13 +30,13 @@ impl Deref for Array {
     type Target = Vec<Value>;
 
     fn deref(&self) -> &Self::Target {
-        &self.inner
+        &self.0
     }
 }
 
 impl DerefMut for Array {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.inner
+        &mut self.0
     }
 }
 
@@ -75,7 +73,7 @@ impl FromIterator<Value> for Array {
         I: IntoIterator<Item = Value>,
     {
         Array {
-            inner: Vec::from_iter(iter),
+            0: Vec::from_iter(iter),
         }
     }
 }

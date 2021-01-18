@@ -25,10 +25,10 @@ use crate::error::{Error, Result};
 ///     Ok(())
 /// }
 /// ```
-pub fn from_bytes<T: Deserialize>(bytes: &[u8]) -> Result<T> {
+pub fn from_slice<T: Deserialize>(bytes: &[u8]) -> Result<T> {
     let mut out = None;
     let ref mut cursor = bytes.iter();
-    from_bytes_impl(cursor, T::begin(&mut out))
+    from_slice_impl(cursor, T::begin(&mut out))
         .and_then(|()| {
             if cursor.as_slice().is_empty() {
                 out
@@ -41,22 +41,29 @@ pub fn from_bytes<T: Deserialize>(bytes: &[u8]) -> Result<T> {
 
 const MAX_DEPTH: u16 = 256;
 
-fn from_bytes_impl<'bytes>(
+fn from_slice_impl<'bytes>(
     bytes: &'_ mut ::core::slice::Iter<'bytes, u8>,
     visitor: &mut dyn Visitor,
 ) -> Option<()> {
     use helpers::*;
 
     // Avoid accidental unchecked recursion; use a thread local to track depth:
-    thread_local! {
-        static DEPTH: ::core::cell::Cell<u16> = MAX_DEPTH.into();
-    }
-    let depth = DEPTH.with(|it| it.replace(it.get() + 1));
-    ::scopeguard::defer! {
-        DEPTH.with(|it| it.set(it.get() - 1));
-    }
-    if depth > MAX_DEPTH {
-        return None;
+    let from_slice_impl = ();
+    drop(from_slice_impl);
+    fn recurse_checked<'bytes>(
+        bytes: &'_ mut ::core::slice::Iter<'bytes, u8>,
+        visitor: &mut dyn Visitor,
+    ) -> Option<()> {
+        thread_local! {
+            static CUR_DEPTH: ::core::cell::Cell<u16> = 0.into();
+        }
+        let ret = if CUR_DEPTH.with(|it| it.replace(it.get() + 1)) > MAX_DEPTH {
+            None
+        } else {
+            self::from_slice_impl(bytes, visitor)
+        };
+        CUR_DEPTH.with(|it| it.set(it.get() - 1));
+        ret
     }
 
     match major_and_tag(bytes.next()?) {
@@ -122,7 +129,7 @@ fn from_bytes_impl<'bytes>(
                 if major_and_tag(bytes.as_slice().get(0)?) == BREAK_CODE {
                     break;
                 }
-                from_bytes_impl(bytes, seq.element().ok()?)?;
+                recurse_checked(bytes, seq.element().ok()?)?;
             }
             seq.finish().ok()?;
         }
@@ -130,20 +137,23 @@ fn from_bytes_impl<'bytes>(
             let len = usize::try_from(parse_u64(tag, bytes)?).ok()?;
             let mut seq = visitor.seq().ok()?;
             for _ in 0..len {
-                from_bytes_impl(bytes, seq.element().ok()?)?;
+                recurse_checked(bytes, seq.element().ok()?)?;
             }
             seq.finish().ok()?;
         }
         (major::MAP, tag::UNKNOWN_LEN) => {
             let mut map = visitor.map().ok()?;
             loop {
-                let orig_slice = bytes.as_slice();
-                if major_and_tag(orig_slice.get(0)?) == BREAK_CODE {
+                if major_and_tag(bytes.as_slice().get(0)?) == BREAK_CODE {
                     break;
                 }
-                from_bytes_impl(bytes, super::Value::begin(&mut None))?;
-                let key_len = orig_slice.len() - bytes.as_slice().len();
-                from_bytes_impl(bytes, map.key(&orig_slice[..key_len]).ok()?)?;
+
+                let out_v = map
+                    .val_with_key(&mut |it| {
+                        it.and_then(|out_k| recurse_checked(bytes, out_k).ok_or(crate::Error))
+                    })
+                    .ok()?;
+                recurse_checked(bytes, out_v)?;
             }
             map.finish().ok()?;
         }
@@ -151,10 +161,12 @@ fn from_bytes_impl<'bytes>(
             let len = usize::try_from(parse_u64(tag, bytes)?).ok()?;
             let mut map = visitor.map().ok()?;
             for _ in 0..len {
-                let orig_slice = bytes.as_slice();
-                from_bytes_impl(bytes, super::Value::begin(&mut None))?;
-                let key_len = orig_slice.len() - bytes.as_slice().len();
-                from_bytes_impl(bytes, map.key(&orig_slice[..key_len]).ok()?)?;
+                let out_v = map
+                    .val_with_key(&mut |it| {
+                        it.and_then(|out_k| recurse_checked(bytes, out_k).ok_or(crate::Error))
+                    })
+                    .ok()?;
+                recurse_checked(bytes, out_v)?;
             }
             map.finish().ok()?;
         }
@@ -166,7 +178,8 @@ fn from_bytes_impl<'bytes>(
             visitor.boolean(t == tag::bool::TRUE).ok()?;
         }
 
-        (major::FLOAT_BOOL_OR_UNIT, tag::UNIT) => {
+        (major::FLOAT_BOOL_OR_UNIT, tag::UNIT_CANONICAL)
+        | (major::FLOAT_BOOL_OR_UNIT, tag::UNIT_ALTERNATIVE) => {
             visitor.null().ok()?;
         }
 
@@ -228,7 +241,8 @@ mod helpers {
             pub const FALSE: u8 = 0x14;
             pub const TRUE: u8 = 0x15;
         }
-        pub const UNIT: u8 = 0x17;
+        pub const UNIT_CANONICAL: u8 = 0x16;
+        pub const UNIT_ALTERNATIVE: u8 = 0x17;
         #[allow(nonstandard_style)]
         pub(in crate) mod FLOAT {
             pub const _16: u8 = 0x19;

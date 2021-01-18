@@ -151,10 +151,12 @@ impl Deserialize for Value {
         }
 
         impl<'a> Map for ObjectBuilder<'a> {
-            fn key(&mut self, k: &[u8]) -> Result<&mut dyn Visitor> {
-                let k = ::core::str::from_utf8(k).map_err(|_| crate::Error)?;
+            fn val_with_key(
+                &mut self,
+                de_key: &mut dyn FnMut(Result<&mut dyn Visitor>) -> Result<()>,
+            ) -> Result<&mut dyn Visitor> {
                 self.shift();
-                self.key = Some(k.to_owned());
+                de_key(Ok(Deserialize::begin(&mut self.key)))?;
                 Ok(Deserialize::begin(&mut self.value))
             }
 

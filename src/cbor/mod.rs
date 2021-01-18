@@ -7,7 +7,7 @@ mod ser;
 pub use self::ser::to_vec;
 
 mod de;
-pub use self::de::from_bytes;
+pub use self::de::from_slice;
 
 mod value;
 pub use self::value::Value;
@@ -18,4 +18,11 @@ pub use self::array::Array;
 mod object;
 pub use self::object::Object;
 
+pub fn to_value<T: crate::Serialize>(v: T) -> crate::Result<Value> {
+    from_slice(&to_vec(&v)?)
+}
+
 mod drop;
+
+#[cfg(test)]
+mod tests;

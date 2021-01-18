@@ -50,7 +50,11 @@ impl Seq for Ignore {
 }
 
 impl Map for Ignore {
-    fn key(&mut self, _k: &[u8]) -> Result<&mut dyn Visitor> {
+    fn val_with_key(
+        &mut self,
+        de_key: &mut dyn FnMut(Result<&mut dyn Visitor>) -> Result<()>,
+    ) -> Result<&mut dyn Visitor> {
+        de_key(Ok(Visitor::ignore()))?;
         Ok(Visitor::ignore())
     }
 

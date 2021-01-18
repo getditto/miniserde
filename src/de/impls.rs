@@ -1,6 +1,5 @@
 use std::collections::{BTreeMap, HashMap};
 use std::hash::{BuildHasher, Hash};
-use std::str::FromStr;
 
 use crate::aliased_box::AliasedBox;
 use crate::de::{Deserialize, Map, Seq, Visitor};
@@ -203,8 +202,11 @@ impl<T: Deserialize> Deserialize for Box<T> {
         }
 
         impl<'a, T: Deserialize> Map for BoxMap<'a, T> {
-            fn key(&mut self, k: &[u8]) -> Result<&mut dyn Visitor> {
-                self.map.key(k)
+            fn val_with_key(
+                &mut self,
+                de_key: &mut dyn FnMut(Result<&mut dyn Visitor>) -> Result<()>,
+            ) -> Result<&mut dyn Visitor> {
+                self.map.val_with_key(de_key)
             }
 
             fn finish(self: Box<Self>) -> Result<()> {
@@ -351,14 +353,14 @@ impl<T: Deserialize> Deserialize for Vec<T> {
 
 impl<K, V, H> Deserialize for HashMap<K, V, H>
 where
-    K: FromStr + Hash + Eq,
+    K: Deserialize + Hash + Eq,
     V: Deserialize,
     H: BuildHasher + Default,
 {
     fn begin(out: &mut Option<Self>) -> &mut dyn Visitor {
         impl<K, V, H> Visitor for Place<HashMap<K, V, H>>
         where
-            K: FromStr + Hash + Eq,
+            K: Deserialize + Hash + Eq,
             V: Deserialize,
             H: BuildHasher + Default,
         {
@@ -389,17 +391,16 @@ where
 
         impl<'a, K, V, H> Map for MapBuilder<'a, K, V, H>
         where
-            K: FromStr + Hash + Eq,
+            K: Deserialize + Hash + Eq,
             V: Deserialize,
             H: BuildHasher + Default,
         {
-            fn key(&mut self, k: &[u8]) -> Result<&mut dyn Visitor> {
-                let k = ::core::str::from_utf8(k).map_err(|_| crate::Error)?;
+            fn val_with_key(
+                &mut self,
+                de_key: &mut dyn FnMut(Result<&mut dyn Visitor>) -> Result<()>,
+            ) -> Result<&mut dyn Visitor> {
                 self.shift();
-                self.key = Some(match K::from_str(k) {
-                    Ok(key) => key,
-                    Err(_) => return Err(Error),
-                });
+                de_key(Ok(Deserialize::begin(&mut self.key)))?;
                 Ok(Deserialize::begin(&mut self.value))
             }
 
@@ -414,9 +415,9 @@ where
     }
 }
 
-impl<K: FromStr + Ord, V: Deserialize> Deserialize for BTreeMap<K, V> {
+impl<K: Deserialize + Ord, V: Deserialize> Deserialize for BTreeMap<K, V> {
     fn begin(out: &mut Option<Self>) -> &mut dyn Visitor {
-        impl<K: FromStr + Ord, V: Deserialize> Visitor for Place<BTreeMap<K, V>> {
+        impl<K: Deserialize + Ord, V: Deserialize> Visitor for Place<BTreeMap<K, V>> {
             fn map(&mut self) -> Result<Box<dyn Map + '_>> {
                 Ok(Box::new(MapBuilder {
                     out: &mut self.out,
@@ -442,14 +443,13 @@ impl<K: FromStr + Ord, V: Deserialize> Deserialize for BTreeMap<K, V> {
             }
         }
 
-        impl<'a, K: FromStr + Ord, V: Deserialize> Map for MapBuilder<'a, K, V> {
-            fn key(&mut self, k: &[u8]) -> Result<&mut dyn Visitor> {
-                let k = ::core::str::from_utf8(k).map_err(|_| crate::Error)?;
+        impl<'a, K: Deserialize + Ord, V: Deserialize> Map for MapBuilder<'a, K, V> {
+            fn val_with_key(
+                &mut self,
+                de_key: &mut dyn FnMut(Result<&mut dyn Visitor>) -> Result<()>,
+            ) -> Result<&mut dyn Visitor> {
                 self.shift();
-                self.key = Some(match K::from_str(k) {
-                    Ok(key) => key,
-                    Err(_) => return Err(Error),
-                });
+                de_key(Ok(Deserialize::begin(&mut self.key)))?;
                 Ok(Deserialize::begin(&mut self.value))
             }
 

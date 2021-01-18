@@ -58,13 +58,18 @@ fn derive_struct(input: &DeriveInput, fields: &FieldsNamed) -> Result<TokenStrea
             }
 
             impl #wrapper_impl_generics miniserde_ditto::ser::Map<'__a> for __Map #wrapper_ty_generics #bounded_where_clause {
-                fn next(&mut self) -> miniserde_ditto::__private::Option<(miniserde_ditto::__private::Cow<'__a, [miniserde_ditto::__private::u8]>, &'__a dyn miniserde_ditto::Serialize)> {
+                fn next (self: &'_ mut Self)
+                  -> miniserde_ditto::__private::Option<(
+                        &'__a dyn miniserde_ditto::Serialize,
+                        &'__a dyn miniserde_ditto::Serialize,
+                    )>
+                {
                     let __state = self.state;
                     self.state = __state + 1;
                     match __state {
                         #(
                             #index => miniserde_ditto::__private::Some((
-                                miniserde_ditto::__private::Cow::Borrowed(#fieldstr.as_bytes()),
+                                &#fieldstr,
                                 &self.data.#fieldname,
                             )),
                         )*

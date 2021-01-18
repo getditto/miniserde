@@ -41,6 +41,10 @@
 //!         let element = self.iter.next()?;
 //!         Some(element)
 //!     }
+//!
+//!     fn remaining(&self) -> usize {
+//!         self.iter.as_slice().len()
+//!     }
 //! }
 //! ```
 //!
@@ -74,14 +78,17 @@
 //! }
 //!
 //! impl<'a> Map<'a> for DemoStream<'a> {
-//!     fn next(&mut self) -> Option<(Cow<'a, str>, &'a dyn Serialize)> {
+//!     fn next(&mut self) -> Option<(&'a dyn Serialize, &'a dyn Serialize)> {
 //!         let state = self.state;
 //!         self.state += 1;
 //!         match state {
-//!             0 => Some((Cow::Borrowed("code"), &self.data.code)),
-//!             1 => Some((Cow::Borrowed("message"), &self.data.message)),
+//!             0 => Some((&"code", &self.data.code)),
+//!             1 => Some((&"message", &self.data.message)),
 //!             _ => None,
 //!         }
+//!     }
+//!     fn remaining(&self) -> usize {
+//!         2 - self.state
 //!     }
 //! }
 //! ```
@@ -104,11 +111,52 @@ pub enum ValueView<'a> {
     Map(Box<dyn Map<'a> + 'a>),
 }
 
+#[cfg(any())] // uncomment when debugging.
+impl ::core::fmt::Debug for ValueView<'_> {
+    fn fmt(self: &'_ Self, fmt: &'_ mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+        use ValueView::*;
+        match *self {
+            Null => fmt.write_str("Null"),
+            Bool(ref b) => fmt.debug_tuple("Bool").field(b).finish(),
+            Str(ref s) => fmt.debug_tuple("Str").field(s).finish(),
+            Bytes(ref xs) => fmt.debug_tuple("Str").field(xs).finish(),
+            Int(ref i) => fmt.debug_tuple("Int").field(i).finish(),
+            F64(ref f) => fmt.debug_tuple("F64").field(f).finish(),
+            Seq(ref seq) => fmt
+                .debug_struct("Seq")
+                .field("remaining", &seq.remaining())
+                .finish(),
+            Map(ref map) => fmt
+                .debug_struct("Map")
+                .field("remaining", &map.remaining())
+                .finish(),
+        }
+    }
+}
+
+impl ValueView<'_> {
+    // Used by the JSON format when serializing keys
+    pub(in crate) fn as_str(&self) -> Option<&'_ str> {
+        match *self {
+            ValueView::Bytes(ref xs) => Some(::core::str::from_utf8(xs).ok()?),
+            ValueView::Str(ref s) => Some(s),
+            _ => None,
+        }
+    }
+}
+
 /// Trait for data structures that can be serialized to a JSON string.
 ///
 /// [Refer to the module documentation for examples.][crate::ser]
 pub trait Serialize {
     fn begin(&self) -> ValueView<'_>;
+
+    fn begin_seq(seq: &'_ [Self]) -> ValueView<'_>
+    where
+        Self: Sized,
+    {
+        crate::private::stream_slice(seq)
+    }
 }
 
 /// Trait that can iterate elements of a sequence.
@@ -123,6 +171,6 @@ pub trait Seq<'view> {
 ///
 /// [Refer to the module documentation for examples.][crate::ser]
 pub trait Map<'view> {
-    fn next(&mut self) -> Option<(Cow<'view, [u8]>, &'view dyn Serialize)>;
+    fn next(&mut self) -> Option<(&'view dyn Serialize, &'view dyn Serialize)>;
     fn remaining(&self) -> usize;
 }

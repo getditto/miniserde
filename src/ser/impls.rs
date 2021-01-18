@@ -39,7 +39,16 @@ macro_rules! unsigned {
         }
     };
 }
-unsigned!(u8);
+// unsigned!(u8);
+impl Serialize for u8 {
+    fn begin(self: &'_ u8) -> ValueView<'_> {
+        ValueView::Int(*self as _)
+    }
+
+    fn begin_seq(seq: &'_ [u8]) -> ValueView<'_> {
+        ValueView::Bytes(seq.into())
+    }
+}
 unsigned!(u16);
 unsigned!(u32);
 unsigned!(u64);
@@ -119,7 +128,7 @@ impl<A: Serialize, B: Serialize> Serialize for (A, B) {
             }
 
             fn remaining(&self) -> usize {
-                2
+                usize::saturating_sub(2, self.state)
             }
         }
 
@@ -133,29 +142,29 @@ impl<A: Serialize, B: Serialize> Serialize for (A, B) {
 
 impl<T: Serialize> Serialize for [T] {
     fn begin(&self) -> ValueView<'_> {
-        private::stream_slice(self)
+        T::begin_seq(self)
     }
 }
 
 impl<T: Serialize> Serialize for Vec<T> {
     fn begin(&self) -> ValueView<'_> {
-        private::stream_slice(self)
+        T::begin_seq(&self[..])
     }
 }
 
 impl<K, V, H> Serialize for HashMap<K, V, H>
 where
-    K: Hash + Eq + ToString,
+    K: Hash + Eq + Serialize,
     V: Serialize,
     H: BuildHasher,
 {
     fn begin(&self) -> ValueView<'_> {
         struct HashMapStream<'a, K: 'a, V: 'a>(hash_map::Iter<'a, K, V>);
 
-        impl<'a, K: ToString, V: Serialize> Map<'a> for HashMapStream<'a, K, V> {
-            fn next(&mut self) -> Option<(Cow<'a, [u8]>, &'a dyn Serialize)> {
+        impl<'a, K: Serialize, V: Serialize> Map<'a> for HashMapStream<'a, K, V> {
+            fn next(&mut self) -> Option<(&'a dyn Serialize, &'a dyn Serialize)> {
                 let (k, v) = self.0.next()?;
-                Some((Cow::Owned(k.to_string().into()), v as &dyn Serialize))
+                Some((k, v))
             }
 
             fn remaining(&self) -> usize {
@@ -167,7 +176,7 @@ where
     }
 }
 
-impl<K: ToString, V: Serialize> Serialize for BTreeMap<K, V> {
+impl<K: Serialize, V: Serialize> Serialize for BTreeMap<K, V> {
     fn begin(&self) -> ValueView<'_> {
         private::stream_btree_map(self)
     }
@@ -191,13 +200,13 @@ impl private {
         ValueView::Seq(Box::new(SliceStream(slice.iter())))
     }
 
-    pub fn stream_btree_map<K: ToString, V: Serialize>(map: &BTreeMap<K, V>) -> ValueView<'_> {
+    pub fn stream_btree_map<K: Serialize, V: Serialize>(map: &BTreeMap<K, V>) -> ValueView<'_> {
         struct BTreeMapStream<'a, K: 'a, V: 'a>(btree_map::Iter<'a, K, V>);
 
-        impl<'a, K: ToString, V: Serialize> Map<'a> for BTreeMapStream<'a, K, V> {
-            fn next(&mut self) -> Option<(Cow<'a, [u8]>, &'a dyn Serialize)> {
+        impl<'a, K: Serialize, V: Serialize> Map<'a> for BTreeMapStream<'a, K, V> {
+            fn next(&mut self) -> Option<(&'a dyn Serialize, &'a dyn Serialize)> {
                 let (k, v) = self.0.next()?;
-                Some((Cow::Owned(k.to_string().into()), v as &dyn Serialize))
+                Some((k, v))
             }
 
             fn remaining(&self) -> usize {

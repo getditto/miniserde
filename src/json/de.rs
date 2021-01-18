@@ -153,7 +153,8 @@ fn from_str_impl(j: &str, mut visitor: &mut dyn Visitor) -> Result<()> {
                 }
                 let inner = {
                     let k = de.parse_str()?;
-                    careful!(map.key(k.as_bytes())? as &mut dyn Visitor)
+                    let out_v = map.val_with_key(&mut |it| it.and_then(|out_k| out_k.string(k)))?;
+                    careful!(out_v as &mut dyn Visitor)
                 };
                 match de.parse_whitespace() {
                     Some(b':') => de.bump(),
