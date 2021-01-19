@@ -33,7 +33,10 @@ pub fn from_slice<T: Deserialize>(bytes: &[u8]) -> Result<T> {
             if cursor.as_slice().is_empty() {
                 out
             } else {
-                None
+                err!(
+                    "Trailing bytes in CBOR deserialization. Remaining = {:#x?}",
+                    cursor.as_slice()
+                );
             }
         })
         .ok_or(Error)
@@ -58,7 +61,7 @@ fn from_slice_impl<'bytes>(
             static CUR_DEPTH: ::core::cell::Cell<u16> = 0.into();
         }
         let ret = if CUR_DEPTH.with(|it| it.replace(it.get() + 1)) > MAX_DEPTH {
-            None
+            err!("Reached maximum depth / recursion when deserializing CBOR object.");
         } else {
             self::from_slice_impl(bytes, visitor)
         };
@@ -88,7 +91,10 @@ fn from_slice_impl<'bytes>(
                             acc_bytes.to_mut().extend_from_slice(chunk);
                         }
                     }
-                    _ => return None,
+                    _ => err!(
+                        r#"Expected \xff or a known-len byte slice. Remaining = {:#x?}"#,
+                        bytes.as_slice(),
+                    ),
                 }
             }
             visitor.bytes(acc_bytes).ok()?;
@@ -112,7 +118,10 @@ fn from_slice_impl<'bytes>(
                             acc_str.to_mut().push_str(s);
                         }
                     }
-                    _ => return None,
+                    _ => err!(
+                        r#"Expected \xff or a known-len string. Remaining = {:#x?}"#,
+                        bytes.as_slice(),
+                    ),
                 }
             }
             visitor.string(acc_str).ok()?;
@@ -200,7 +209,10 @@ fn from_slice_impl<'bytes>(
             visitor.float(f).ok()?;
         }
 
-        (major::FLOAT_BOOL_OR_UNIT, _) => return None,
+        (major::FLOAT_BOOL_OR_UNIT, _) => err!(
+            r#"Incorrect tag associated to major 7. Remaining = {:#x?}"#,
+            bytes.as_slice(),
+        ),
 
         _ => unreachable!(),
     }
@@ -270,7 +282,7 @@ mod helpers {
                     $bytes.next().map(|&b| b)
                 }))
                 .as_ref()
-        ).ok()?
+        ).ok().or_else(|| err!("Expected {} bytes to deserialize an integer", $N))?
     })}
     pub(in crate) use multi_bytes;
 
@@ -282,7 +294,10 @@ mod helpers {
                 tag::U16 => u16::from_be_bytes(multi_bytes!(bytes, 2)) as _,
                 tag::U32 => u32::from_be_bytes(multi_bytes!(bytes, 4)) as _,
                 tag::U64 => u64::from_be_bytes(multi_bytes!(bytes, 8)) as _,
-                _ => return None,
+                _ => err!(
+                    "Incorrect integer tag. Remaining = {:#x?}",
+                    bytes.as_slice()
+                ),
             }
         })
     }
