@@ -120,7 +120,7 @@ fn from_str_impl(j: &str, mut visitor: &mut dyn Visitor) -> Result<()> {
                     match layer {
                         Layer::Seq(seq) if close == b']' => seq.finish()?,
                         Layer::Map(map) if close == b'}' => map.finish()?,
-                        _ => return Err(Error),
+                        _ => err!("Incorrect closing delimeter at index {}", de.pos),
                     };
                     let frame = match de.stack.pop() {
                         Some(frame) => frame,
@@ -132,7 +132,7 @@ fn from_str_impl(j: &str, mut visitor: &mut dyn Visitor) -> Result<()> {
                 }
                 _ => {
                     if accept_comma {
-                        return Err(Error);
+                        err!("Unexpected end of sequence or map at index {}", de.pos);
                     } else {
                         break;
                     }
@@ -149,7 +149,7 @@ fn from_str_impl(j: &str, mut visitor: &mut dyn Visitor) -> Result<()> {
             Layer::Map(mut map) => {
                 match de.parse_whitespace() {
                     Some(b'"') => de.bump(),
-                    _ => return Err(Error),
+                    _ => err!("Missing `\"` at index {}", de.pos),
                 }
                 let inner = {
                     let k = de.parse_str()?;
@@ -158,7 +158,7 @@ fn from_str_impl(j: &str, mut visitor: &mut dyn Visitor) -> Result<()> {
                 };
                 match de.parse_whitespace() {
                     Some(b':') => de.bump(),
-                    _ => return Err(Error),
+                    _ => err!("Missing `:` at index {}", de.pos),
                 }
                 let outer = mem::replace(&mut visitor, inner);
                 de.stack.push((outer, Layer::Map(map)));
@@ -167,7 +167,7 @@ fn from_str_impl(j: &str, mut visitor: &mut dyn Visitor) -> Result<()> {
     }
 
     match de.parse_whitespace() {
-        Some(_) => Err(Error),
+        Some(_) => err!("Unexpected trailing content at index {}", de.pos),
         None => Ok(()),
     }
 }
@@ -235,7 +235,7 @@ impl<'a, 'b> Deserializer<'a, 'b> {
                 self.pos += 1;
             }
             if self.pos == self.input.len() {
-                return Err(Error);
+                err!("Unexpected end of input");
             }
             match self.input[self.pos] {
                 b'"' => {
@@ -257,9 +257,11 @@ impl<'a, 'b> Deserializer<'a, 'b> {
                     self.parse_escape()?;
                     start = self.pos;
                 }
-                _ => {
-                    return Err(Error);
-                }
+                control_char => err!(
+                    r#"Incorrect control character \x{:02x} at index {}"#,
+                    control_char,
+                    self.pos,
+                ),
             }
         }
     }
@@ -285,23 +287,23 @@ impl<'a, 'b> Deserializer<'a, 'b> {
             b'u' => {
                 let c = match self.decode_hex_escape()? {
                     0xDC00..=0xDFFF => {
-                        return Err(Error);
+                        err!("Incorrect hex escape at index {}", self.pos);
                     }
 
                     // Non-BMP characters are encoded as a sequence of
                     // two hex escapes, representing UTF-16 surrogates.
                     n1 @ 0xD800..=0xDBFF => {
                         if self.next_or_eof()? != b'\\' {
-                            return Err(Error);
+                            err!("Expected second hex escape at index {}", self.pos);
                         }
                         if self.next_or_eof()? != b'u' {
-                            return Err(Error);
+                            err!("Expected second hex escape at index {}", self.pos);
                         }
 
                         let n2 = self.decode_hex_escape()?;
 
                         if n2 < 0xDC00 || n2 > 0xDFFF {
-                            return Err(Error);
+                            err!("Incorrect hex escape at index {}", self.pos);
                         }
 
                         let n = (u32::from(n1 - 0xD800) << 10 | u32::from(n2 - 0xDC00)) + 0x1_0000;
@@ -309,7 +311,7 @@ impl<'a, 'b> Deserializer<'a, 'b> {
                         match char::from_u32(n) {
                             Some(c) => c,
                             None => {
-                                return Err(Error);
+                                err!("Incorrect hex escape at index {}", self.pos);
                             }
                         }
                     }
@@ -317,7 +319,7 @@ impl<'a, 'b> Deserializer<'a, 'b> {
                     n => match char::from_u32(u32::from(n)) {
                         Some(c) => c,
                         None => {
-                            return Err(Error);
+                            err!("Incorrect hex escape at index {}", self.pos);
                         }
                     },
                 };
@@ -326,7 +328,7 @@ impl<'a, 'b> Deserializer<'a, 'b> {
                     .extend_from_slice(c.encode_utf8(&mut [0_u8; 4]).as_bytes());
             }
             _ => {
-                return Err(Error);
+                err!("Incorrect escape at index {}", self.pos);
             }
         }
 
@@ -345,7 +347,7 @@ impl<'a, 'b> Deserializer<'a, 'b> {
                 b'e' | b'E' => n * 16_u16 + 14_u16,
                 b'f' | b'F' => n * 16_u16 + 15_u16,
                 _ => {
-                    return Err(Error);
+                    err!("Expected a hex digit at index {}", self.pos);
                 }
             };
         }
@@ -366,16 +368,9 @@ impl<'a, 'b> Deserializer<'a, 'b> {
     }
 
     fn parse_ident(&mut self, ident: &[u8]) -> Result<()> {
-        for expected in ident {
-            match self.next() {
-                None => {
-                    return Err(Error);
-                }
-                Some(next) => {
-                    if next != *expected {
-                        return Err(Error);
-                    }
-                }
+        for &expected in ident {
+            if self.next() != Some(expected) {
+                err!("Expected `{}` at index {}", expected as char, self.pos);
             }
         }
         Ok(())
@@ -386,7 +381,7 @@ impl<'a, 'b> Deserializer<'a, 'b> {
             b'0' => {
                 // There can be only one leading '0'.
                 match self.peek_or_nul() {
-                    b'0'..=b'9' => Err(Error),
+                    b'0'..=b'9' => err!("Incorrect leading `0` at index {}", self.pos),
                     _ => self.parse_number(nonnegative, 0),
                 }
             }
@@ -491,7 +486,7 @@ impl<'a, 'b> Deserializer<'a, 'b> {
         }
 
         if !at_least_one_digit {
-            return Err(Error);
+            err!("Expected a decimal number at index {}", self.pos);
         }
 
         match self.peek_or_nul() {
@@ -524,7 +519,7 @@ impl<'a, 'b> Deserializer<'a, 'b> {
         let mut exp = match self.next_or_nul() {
             c @ b'0'..=b'9' => i32::from(c - b'0'),
             _ => {
-                return Err(Error);
+                err!("Missing digit at index {}", self.pos);
             }
         };
 
@@ -560,7 +555,7 @@ impl<'a, 'b> Deserializer<'a, 'b> {
     ) -> Result<f64> {
         // Error instead of +/- infinity.
         if significand != 0 && positive_exp {
-            return Err(Error);
+            err!("Got +/- infinity at index {}", self.pos);
         }
 
         while let b'0'..=b'9' = self.peek_or_nul() {
@@ -572,7 +567,7 @@ impl<'a, 'b> Deserializer<'a, 'b> {
     fn event(&mut self) -> Result<Event<'_>> {
         let peek = match self.parse_whitespace() {
             Some(b) => b,
-            None => return Err(Error),
+            None => err!("Unexpected end of input at index {}", self.pos),
         };
         self.bump();
         match peek {
@@ -596,7 +591,7 @@ impl<'a, 'b> Deserializer<'a, 'b> {
                 self.parse_ident(b"alse")?;
                 Ok(Bool(false))
             }
-            _ => Err(Error),
+            _ => err!(r#"Unexpected char \x{:02x} at index {}"#, peek, self.pos),
         }
     }
 }
@@ -609,7 +604,7 @@ fn f64_from_parts(nonnegative: bool, significand: u64, mut exponent: i32) -> Res
                 if exponent >= 0 {
                     f *= pow;
                     if f.is_infinite() {
-                        return Err(Error);
+                        err!("Encountered an infinite float");
                     }
                 } else {
                     f /= pow;
@@ -621,7 +616,7 @@ fn f64_from_parts(nonnegative: bool, significand: u64, mut exponent: i32) -> Res
                     break;
                 }
                 if exponent >= 0 {
-                    return Err(Error);
+                    err!("Incorrect exponent when parsing a float");
                 }
                 f /= 1e308;
                 exponent += 308;
