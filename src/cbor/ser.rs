@@ -182,7 +182,7 @@ pub fn to_writer<'value>(
                         v: i as u64,
                     }
                     .into(out)?,
-                    _ => return Err(None),
+                    _ => err!("Cannot serialize integer {:?} as CBOR: out of range", i),
                 }
             }
             ValueView::F64(f) if f.is_infinite() => write!(if f.is_sign_positive() {

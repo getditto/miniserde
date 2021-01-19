@@ -160,6 +160,28 @@
 #![deny(rust_2018_idioms)]
 #![allow(explicit_outlives_requirements)]
 
+macro_rules! err {(
+    $($args:tt)*
+) => ({
+    if cfg!(feature = "debug-serde-errors") {
+        eprintln!("Serde error: {}", format_args!($($args)*));
+    }
+    return crate::ResultLike::ERROR;
+})}
+
+trait ResultLike {
+    const ERROR: Self;
+}
+impl<T> ResultLike for Result<T> {
+    const ERROR: Self = Err(Error);
+}
+impl<T> ResultLike for Option<T> {
+    const ERROR: Self = None;
+}
+impl<T, E> ResultLike for Result<T, Option<E>> {
+    const ERROR: Self = Err(None);
+}
+
 #[doc(hidden)]
 pub use ::derives::*;
 

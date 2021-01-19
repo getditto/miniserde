@@ -3,7 +3,7 @@ use std::hash::{BuildHasher, Hash};
 
 use crate::aliased_box::AliasedBox;
 use crate::de::{Deserialize, Map, Seq, Visitor};
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::Place;
 
 impl Deserialize for () {
@@ -52,7 +52,7 @@ macro_rules! signed {
                         const MAX: i128 = ::core::$ty::MAX as _;
                         self.out = Some(match i {
                             MIN..=MAX => i as _,
-                            _ => return Err(Error),
+                            _ => err!("Cannot deserialize {:?} as a {}", i, stringify!($ty)),
                         });
                         Ok(())
                     }
@@ -78,7 +78,7 @@ macro_rules! unsigned {
                             self.out = Some(i as $ty);
                             Ok(())
                         } else {
-                            Err(Error)
+                            err!("Cannot deserialize {:?} as a {}", i, stringify!($ty));
                         }
                     }
                 }
@@ -290,7 +290,7 @@ impl<A: Deserialize, B: Deserialize> Deserialize for (A, B) {
                 } else if self.tuple.1.is_none() {
                     Ok(Deserialize::begin(&mut self.tuple.1))
                 } else {
-                    Err(Error)
+                    err!("Attempted to deserialize more than two elements into a tuple");
                 }
             }
 
@@ -299,7 +299,7 @@ impl<A: Deserialize, B: Deserialize> Deserialize for (A, B) {
                     *self.out = Some((a, b));
                     Ok(())
                 } else {
-                    Err(Error)
+                    err!("Attempted to deserialize less than two elements into a tuple");
                 }
             }
         }

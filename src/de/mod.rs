@@ -289,7 +289,7 @@ impl<T: StrKeyMap> Map for T {
         de_key(Ok(Deserialize::begin(&mut s)))?;
         match s.as_deref() {
             Some(k) => self.key(k),
-            None => Err(crate::Error),
+            None => err!("Encountered a non-string map key"),
         }
     }
 
