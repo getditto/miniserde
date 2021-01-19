@@ -171,7 +171,7 @@ fn from_slice_impl<'bytes>(
             map.finish().ok()?;
         }
 
-        (major::CUSTOM_TAG, tag) => todo!("Custom tag (tag = {:#x})", tag),
+        (major::CUSTOM_TAG, tag) => err!("Custom tag (tag = {:#x}) cannot be deserialized", tag),
 
         (major::FLOAT_BOOL_OR_UNIT, t @ tag::bool::TRUE)
         | (major::FLOAT_BOOL_OR_UNIT, t @ tag::bool::FALSE) => {
