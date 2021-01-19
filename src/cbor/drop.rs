@@ -11,13 +11,12 @@ pub fn safely(value: Value) {
     while let Some(value) = stack.pop() {
         match value {
             Value::Array(vec) => {
-                for child in vec {
-                    stack.push(child);
-                }
+                stack.extend(vec);
             }
             Value::Map(map) => {
-                for (_, child) in map {
-                    stack.push(child);
+                for (child_key, child_value) in map {
+                    stack.push(child_key);
+                    stack.push(child_value);
                 }
             }
             _ => {}

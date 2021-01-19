@@ -5,23 +5,37 @@ use ::core::convert::TryFrom;
 use crate::de::{Deserialize, Visitor};
 use crate::error::{Error, Result};
 
-/// Deserialize a JSON string into any deserializable type.
+/// Deserialize a CBOR byte sequence into any deserializable type.
 ///
 /// ```rust
-/// use miniserde_ditto::{json, Deserialize};
+/// use miniserde_ditto::{cbor, Deserialize};
 ///
-/// #[derive(Deserialize, Debug)]
+/// #[derive(Deserialize, Debug, PartialEq)]
 /// struct Example {
 ///     code: u32,
 ///     message: String,
 /// }
 ///
 /// fn main() -> miniserde_ditto::Result<()> {
-///     let j = r#" {"code": 200, "message": "reminiscent of Serde"} "#;
+///     let j = &[
+///         0xa2, // 2-long map
 ///
-///     let out: Example = json::from_str(&j)?;
+///             0x64, // 4-long str
+///                 b'c', b'o', b'd', b'e',
+///             0x18, // positive u8 > 24.
+///                 0xc8, // 200 = 0xc8
+///
+///             0x67, // 7-long str
+///                 b'm', b'e', b's', b's', b'a', b'g', b'e',
+///             0x74, // str of length: 0x14 = 20.
+///                 b'R', b'e', b'm', b'i', b'n', b'i', b's', b'c', b'e', b'n', b't',
+///                 b' ', b'o', b'f', b' ',
+///                 b'S', b'e', b'r', b'd', b'e',
+///     ][..];
+///     let out: Example = cbor::from_slice(&j)?;
 ///     println!("{:?}", out);
 ///
+///     assert_eq!(out, Example { code: 200, message: "Reminiscent of Serde".into() });
 ///     Ok(())
 /// }
 /// ```

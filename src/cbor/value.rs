@@ -293,3 +293,12 @@ macro_rules! impl_From {(
     )*
 )}
 use impl_From;
+
+pub fn to_value<T: crate::Serialize>(v: T) -> crate::Result<Value> {
+    use super::*;
+    from_slice(&to_vec(&v)?)
+}
+pub fn from_value<T: crate::Deserialize>(v: Value) -> crate::Result<T> {
+    use super::*;
+    from_slice(&to_vec(&v)?)
+}

@@ -32,12 +32,12 @@
 //!     }
 //! }
 //!
-//! struct SliceStream<'a, T: 'a> {
-//!     iter: std::slice::Iter<'a, T>,
+//! struct SliceStream<'view, T: 'view> {
+//!     iter: std::slice::Iter<'view, T>,
 //! }
 //!
-//! impl<'a, T: Serialize> Seq<'a> for SliceStream<'a, T> {
-//!     fn next(&mut self) -> Option<&'a dyn Serialize> {
+//! impl<'view, T: Serialize> Seq<'view> for SliceStream<'view, T> {
+//!     fn next(&mut self) -> Option<&'view dyn Serialize> {
 //!         let element = self.iter.next()?;
 //!         Some(element)
 //!     }
@@ -72,13 +72,13 @@
 //!     }
 //! }
 //!
-//! struct DemoStream<'a> {
-//!     data: &'a Demo,
+//! struct DemoStream<'view> {
+//!     data: &'view Demo,
 //!     state: usize,
 //! }
 //!
-//! impl<'a> Map<'a> for DemoStream<'a> {
-//!     fn next(&mut self) -> Option<(&'a dyn Serialize, &'a dyn Serialize)> {
+//! impl<'view> Map<'view> for DemoStream<'view> {
+//!     fn next(&mut self) -> Option<(&'view dyn Serialize, &'view dyn Serialize)> {
 //!         let state = self.state;
 //!         self.state += 1;
 //!         match state {
@@ -100,15 +100,15 @@ use std::borrow::Cow;
 /// One unit of output produced during serialization.
 ///
 /// [Refer to the module documentation for examples.][crate::ser]
-pub enum ValueView<'a> {
+pub enum ValueView<'view> {
     Null,
     Bool(bool),
-    Str(Cow<'a, str>),
-    Bytes(Cow<'a, [u8]>),
+    Str(Cow<'view, str>),
+    Bytes(Cow<'view, [u8]>),
     Int(i128),
     F64(f64),
-    Seq(Box<dyn Seq<'a> + 'a>),
-    Map(Box<dyn Map<'a> + 'a>),
+    Seq(Box<dyn Seq<'view> + 'view>),
+    Map(Box<dyn Map<'view> + 'view>),
 }
 
 #[cfg(any())] // uncomment when debugging.

@@ -22,7 +22,17 @@ mod object;
 pub use self::object::Object;
 
 pub fn to_value<T: crate::Serialize>(v: T) -> crate::Result<Value> {
+    // Inefficient polyfill implementation.
     from_str(&to_string(&v)?)
 }
+
+pub fn from_value<T: crate::Deserialize>(v: Value) -> crate::Result<T> {
+    // Inefficient polyfill implementation.
+    from_str(&to_string(&v)?)
+}
+
+// for API compat with `::serde_json`
+#[doc(no_inline)]
+pub use crate::{Error, Result};
 
 mod drop;

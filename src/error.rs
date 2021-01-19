@@ -4,6 +4,14 @@ use std::fmt::{self, Display};
 ///
 /// Miniserde errors contain no information about what went wrong. **If you need
 /// more than no information, use Serde.**
+///
+/// If you really want to have some hacky way to access more info about some
+/// serde failure, if you compile this crate with the following env var:
+///
+///   - **`MINISERDE_DEBUG_ERRORS=1`**
+///
+/// then, more explicit error messages will be printed to the `stderr` when
+/// encountered.
 #[derive(Copy, Clone, Debug)]
 pub struct Error;
 
