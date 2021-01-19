@@ -184,7 +184,7 @@
 
 mod impls;
 
-use crate::error::{Error, Result};
+use crate::error::Result;
 
 /// Trait for data structures that can be deserialized from a JSON string.
 ///
@@ -223,35 +223,47 @@ pub trait Deserialize: Sized {
 #[allow(unused_variables)]
 pub trait Visitor {
     fn null(&mut self) -> Result<()> {
-        Err(Error)
+        err!("Cannot deserialize a `null` at that position.");
     }
 
     fn boolean(&mut self, b: bool) -> Result<()> {
-        Err(Error)
+        err!(
+            "Cannot deserialize a `boolean` (got {:?}) at that position.",
+            b
+        );
     }
 
     fn string(&mut self, s: &str) -> Result<()> {
-        Err(Error)
+        err!(
+            "Cannot deserialize a `string` (got {:?}) at that position.",
+            s
+        );
     }
 
-    fn bytes(&mut self, s: &[u8]) -> Result<()> {
-        Err(Error)
+    fn bytes(&mut self, xs: &[u8]) -> Result<()> {
+        err!(
+            "Cannot deserialize a `bytes` (got {:#x?}) at that position.",
+            xs
+        );
     }
 
     fn int(&mut self, i: i128) -> Result<()> {
-        Err(Error)
+        err!("Cannot deserialize a `int` (got {:?}) at that position.", i);
     }
 
-    fn float(&mut self, n: f64) -> Result<()> {
-        Err(Error)
+    fn float(&mut self, f: f64) -> Result<()> {
+        err!(
+            "Cannot deserialize a `float` (got {:?}) at that position.",
+            f
+        );
     }
 
     fn seq(&mut self) -> Result<Box<dyn Seq + '_>> {
-        Err(Error)
+        err!("Cannot deserialize a `seq` at that position.");
     }
 
     fn map(&mut self) -> Result<Box<dyn Map + '_>> {
-        Err(Error)
+        err!("Cannot deserialize a `map` at that position.");
     }
 }
 
@@ -289,7 +301,7 @@ impl<T: StrKeyMap> Map for T {
         de_key(Ok(Deserialize::begin(&mut s)))?;
         match s.as_deref() {
             Some(k) => self.key(k),
-            None => err!("Encountered a non-string map key"),
+            None => err!("Encountered a non-string when deserializing"),
         }
     }
 

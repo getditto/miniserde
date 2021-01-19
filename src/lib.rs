@@ -181,6 +181,9 @@ impl<T> ResultLike for Option<T> {
 impl<T, E> ResultLike for Result<T, Option<E>> {
     const ERROR: Self = Err(None);
 }
+impl ResultLike for Error {
+    const ERROR: Self = Error;
+}
 
 #[doc(hidden)]
 pub use ::derives::*;

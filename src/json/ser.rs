@@ -84,7 +84,9 @@ pub fn to_string<'value>(value: &'value dyn Serialize) -> crate::Result<String> 
                 match map.next() {
                     Some((key, first)) => {
                         let key = key.view();
-                        let key = key.as_str().ok_or(crate::Error)?;
+                        let key = key
+                            .as_str()
+                            .ok_or_else(|| err!("Expected string key for JSON serialization"))?;
                         escape_str(key, &mut out);
                         out.push(':');
                         stack.push(Layer::Map(map));
@@ -109,7 +111,9 @@ pub fn to_string<'value>(value: &'value dyn Serialize) -> crate::Result<String> 
                 Some(Layer::Map(map)) => match map.next() {
                     Some((key, next)) => {
                         let key = key.view();
-                        let key = key.as_str().ok_or(crate::Error)?;
+                        let key = key
+                            .as_str()
+                            .ok_or_else(|| err!("Expected string key for JSON serialization"))?;
                         out.push(',');
                         escape_str(key, &mut out);
                         out.push(':');

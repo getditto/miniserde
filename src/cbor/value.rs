@@ -145,7 +145,7 @@ impl Deserialize for Value {
                         self.out = Some(Value::Integer(i));
                         Ok(())
                     }
-                    _ => Err(crate::Error),
+                    _ => err!("Integer out of CBOR range"),
                 }
             }
 
