@@ -114,7 +114,7 @@ impl Serialize for Value {
             Value::Text(s) => ValueView::Str(Cow::Borrowed(s)),
             Value::Array(array) => private::stream_slice(array),
             Value::Map(map) => private::stream_cbor_object(map),
-            Value::Tag(..) => todo!(),
+            Value::Tag(..) => unimplemented!("Serializing tags is not supported by this crate."),
         }
     }
 }
