@@ -9,7 +9,7 @@ use ::std::io::{self, Write as _};
 /// Serialize any serializable type into a CBOR byte sequence.
 ///
 /// ```rust
-/// use miniserde_ditto::{json, Serialize};
+/// use miniserde_ditto::{cbor, Serialize};
 ///
 /// #[derive(Serialize, Debug)]
 /// struct Example {
@@ -20,16 +20,31 @@ use ::std::io::{self, Write as _};
 /// fn main() {
 ///     let example = Example {
 ///         code: 200,
-///         message: "reminiscent of Serde".to_owned(),
+///         message: "Reminiscent of Serde".to_owned(),
 ///     };
 ///
-///     let j = json::to_string(&example).unwrap();
-///     println!("{}", j);
+///     let bytes = &cbor::to_vec(&example).unwrap()[..];
+///     println!("{:#x?}", bytes);
+///     assert_eq!(bytes, &[
+///         0xa2, // 2-long map
+///
+///             0x64, // 4-long str
+///                 b'c', b'o', b'd', b'e',
+///             0x18, // positive u8 > 24.
+///                 0xc8, // 200 = 0xc8
+///
+///             0x67, // 7-long str
+///                 b'm', b'e', b's', b's', b'a', b'g', b'e',
+///             0x74, // str of length: 0x14 = 20.
+///                 b'R', b'e', b'm', b'i', b'n', b'i', b's', b'c', b'e', b'n', b't',
+///                 b' ', b'o', b'f', b' ',
+///                 b'S', b'e', b'r', b'd', b'e',
+///     ][..]);
 /// }
 /// ```
-pub fn to_vec<T: ?Sized + Serialize>(value: &T) -> Result<Vec<u8>> {
+pub fn to_vec<T: Serialize>(ref value: T) -> Result<Vec<u8>> {
     let mut v = vec![];
-    match to_writer(&value, &mut v) {
+    match to_writer(&mut v, &value) {
         Ok(()) => Ok(v),
         Err(None) => Err(crate::Error),
         Err(Some(io_err)) => unreachable!("IO failure on a Vec: {}", io_err),
@@ -107,8 +122,8 @@ impl write_u64 {
 ///   - `Err(Some(io_error))` on I/O failure.
 ///   - `Err(None)` on serialization error (unrepresentable integer).
 pub fn to_writer<'value>(
-    value: &'value dyn Serialize,
     out: &'_ mut dyn io::Write,
+    value: &'value dyn Serialize,
 ) -> Result<(), Option<io::Error>> {
     // Borrow-checker-friendly "closure"
     #[cfg_attr(rustfmt, rustfmt::skip)]
@@ -252,7 +267,10 @@ pub fn to_writer<'value>(
 mod tests {
     use super::*;
 
-    use crate::{cbor::*, Serialize};
+    use crate::{
+        cbor::{value::*, *},
+        Serialize,
+    };
 
     macro_rules! assert_eq_hex {
         (

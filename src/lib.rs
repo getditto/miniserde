@@ -32,10 +32,11 @@
 //!     };
 //!
 //!     let j = json::to_string(&example)?;
-//!     println!("{}", j);
+//!     assert_eq!(j, r#"{"code":200,"message":"reminiscent of Serde"}"#);
 //!
 //!     let out: Example = json::from_str(&j)?;
-//!     println!("{:?}", out);
+//!     assert_eq!(out.code, 200);
+//!     eprintln!("{:?}", out);
 //!
 //!     Ok(())
 //! }
@@ -82,17 +83,30 @@
 //! Without monomorphization, the derived impls compile lightning fast and
 //! occupy very little size in the executable.
 //!
-//! ## <font color="#C0C0C0">Different:</font> No recursion
+//! ## <font color="#C0C0C0">Different:</font> ~~No~~ Less recursion
 //!
 //! Serde depends on recursion for serialization as well as deserialization.
 //! Every level of nesting in your data means more stack usage until eventually
 //! you overflow the stack. Some formats set a cap on nesting depth to prevent
 //! stack overflows and just refuse to deserialize deeply nested data.
 //!
-//! In miniserde neither serialization nor deserialization involves recursion.
-//! You can safely process arbitrarily nested data without being exposed to
-//! stack overflows. Not even the Drop impl of our json `Value` type is
-//! recursive so you can safely nest them arbitrarily.
+//! In `miniserde::json` neither serialization nor deserialization involves
+//! recursion. You can safely process arbitrarily nested data without being
+//! exposed to stack overflows. Not even the Drop impl of our json `Value` type
+//! is recursive so you can safely nest them arbitrarily.
+//!
+//! On the other hand, `miniserde::cbor` deserialization **does use recursion**.
+//! It is capped, so that a deeply nested object (_e.g._, 256 layers) cause a
+//! controlled deserialization error (no stack overflow). This is by design,
+//! since it doesn't seem possible to feature a design with:
+//!
+//!   - simple traits;
+//!   - no recursion;
+//!   - no `unsafe`.
+//!
+//! This fork of `::miniserde` that adds CBOR prefers to pay the cost of not
+//! supporting deeply nested objects rather than to resort to dangerous `unsafe`
+//! code.
 //!
 //! ## <font color="#C0C0C0">Different:</font> No deserialization error messages
 //!
@@ -104,14 +118,7 @@
 //! receive a line, column, and helpful description of the failure. This keeps
 //! error handling logic out of caches along the performance-critical codepath.
 //!
-//! ## <font color="#C0C0C0">Different:</font> Infallible serialization
-//!
-//! Serialization always succeeds. This means we cannot serialize some data
-//! types that Serde can serialize, such as `Mutex` which may fail to serialize
-//! due to poisoning. Also we only serialize to `String`, not to something like
-//! an i/o stream which may be fallible.
-//!
-//! ## <font color="#C0C0C0">Different:</font> JSON only
+//! ## <font color="#C0C0C0">Different:</font> JSON/CBOR only
 //!
 //! The same approach in this library could be made to work for other data
 //! formats, but it is not a goal to enable that through what this library
@@ -120,7 +127,7 @@
 //! ## <font color="#C0C0C0">Different:</font> Structs only
 //!
 //! The miniserde derive macros will refuse anything other than a braced struct
-//! with named fields. Enums and tuple structs are not supported.
+//! with named fields. Enums and tuple structs are not (yet) supported.
 //!
 //! ## <font color="#C0C0C0">Different:</font> No customization
 //!
@@ -133,7 +140,6 @@
 //! restricts the kinds of on-the-fly manipulation that are possible in custom
 //! impls. If you need any of this, use Serde -- it's a great library.
 
-#![doc(html_root_url = "https://docs.rs/miniserde/0.1.13")]
 #![allow(
     clippy::needless_doctest_main,
     clippy::vec_init_then_push,
@@ -163,8 +169,8 @@
 macro_rules! err {(
     $($args:tt)*
 ) => ({
-    if cfg!(feature = "debug-serde-errors") {
-        eprintln!("Serde error: {}", format_args!($($args)*));
+    if ::core::option_env!("MINISERDE_DEBUG_ERRORS") == Some("1") {
+        ::std::eprintln!("Serde error: {}", ::core::format_args!($($args)*));
     }
     return crate::ResultLike::ERROR;
 })}
@@ -188,9 +194,8 @@ impl ResultLike for Error {
 #[doc(hidden)]
 pub use ::derives::*;
 
-// Not public API.
+/// Not public API.
 #[doc(hidden)]
-#[path = "export.rs"]
 pub mod __private;
 
 mod aliased_box;

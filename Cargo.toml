@@ -12,9 +12,6 @@ documentation = "https://docs.rs/miniserde"
 readme = "README.md"
 edition = "2018"
 
-[features]
-debug-serde-errors = []
-
 [dependencies]
 itoa = { version = "0.4.3", features = ["i128"] }
 half = { version = "1.6.0", features = [] }

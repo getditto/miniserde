@@ -184,7 +184,7 @@
 
 mod impls;
 
-use crate::error::Result;
+use crate::Result;
 
 /// Trait for data structures that can be deserialized from a JSON string.
 ///
@@ -277,6 +277,15 @@ pub trait Seq {
 
 /// Trait that can hand out places to write values of a map.
 ///
+/// In order to support arbitrary `impl Deserialize` keys, the API requires
+/// yielding an out-slot for the key through a callback, and once this callback
+/// returns, the implementor can inspect the just deserialized key to yield
+/// the appropriate / matching out-slot value.
+///
+/// Since the signature is a bit complex, and most implementations only use
+/// stringly-typed keys, **it is recommended to implement the much simpler
+/// [`StrKeyMap`] convenience trait instead**.
+///
 /// [Refer to the module documentation for examples.][crate::de]
 pub trait Map {
     fn val_with_key(
@@ -286,6 +295,9 @@ pub trait Map {
     fn finish(self: Box<Self>) -> Result<()>;
 }
 
+/// Convenience trait to automagically implement the more complex [`Map`] trait
+/// in the case where only stringly-typed keys are to be deserialized (_e.g._,
+/// when dealing with `struct`s).
 pub trait StrKeyMap: Map {
     fn key(&mut self, k: &str) -> Result<&mut dyn Visitor>;
 
@@ -301,7 +313,7 @@ impl<T: StrKeyMap> Map for T {
         de_key(Ok(Deserialize::begin(&mut s)))?;
         match s.as_deref() {
             Some(k) => self.key(k),
-            None => err!("Encountered a non-string when deserializing"),
+            None => err!("Encountered a non-string key when deserializing"),
         }
     }
 
