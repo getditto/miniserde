@@ -265,6 +265,9 @@ pub fn to_writer<'value>(
 
 #[cfg(test)]
 mod tests {
+    //! Most of these tests have been taken from
+    //! https://github.com/pyfisch/cbor/blob/a218403a52e60c991313f429e4acc05cce81ce25/tests/ser.rs
+
     use super::*;
 
     use crate::{
@@ -522,20 +525,40 @@ mod tests {
                 ]
             );
 
-            // byte strings > 256 bytes have 3-byte headers
+            // byte strings ≥ 256 bytes have 3-byte headers
             let long_vec = (0..256).map(|i| (i & 0xFF) as u8).collect::<Vec<_>>();
             let long_s = to_vec(&long_vec).unwrap();
             assert_eq_hex!(&long_s[0..3], [0x59, 1, 0]);
             assert_eq_hex!(&long_s[3..], &long_vec[..]);
 
-            // byte strings > 2^16 bytes have 5-byte headers
+            // byte strings ≥ 2^16 bytes have 5-byte headers
             let very_long_vec = (0..65536).map(|i| (i & 0xFF) as u8).collect::<Vec<_>>();
             let very_long_s = to_vec(&very_long_vec).unwrap();
             assert_eq_hex!(&very_long_s[0..5], [0x5a, 0, 1, 0, 0]);
             assert_eq_hex!(&very_long_s[5..], &very_long_vec[..]);
 
-            // byte strings > 2^32 bytes have 9-byte headers, but they take too much RAM
-            // to test in Travis.
+            // byte strings ≥ 2^32 bytes have 9-byte headers,
+            // but they take too much RAM to test in most CI setups, such as Travis.
+            // Confident on our implementation of the serialization code (which
+            // only copies the byte slice contents provided the writer allows it),
+            // we `unsafe`-ly fake a gigantic slice by using a writer
+            // that will saturate right after the header has been written.
+            #[cfg(target_pointer_width = "64")] #[cfg_attr(rustfmt, rustfmt::skip)]
+            unsafe {
+                let fake_huge_byte_seq: &'_ [u8] = ::core::slice::from_raw_parts(
+                    0x1 as _,
+                    0x00_00_00_01_de_ad_be_ef,
+                );
+                let mut _9 = [0_u8; 9];
+                let _ = to_writer(&mut &mut _9[..], &fake_huge_byte_seq);
+                assert_eq_hex!(
+                    &_9[..],
+                    [
+                        0x5b,
+                        0x00, 0x00, 0x00, 0x01, 0xde, 0xad, 0xbe, 0xef,
+                    ],
+                );
+            }
         }
 
         #[test]

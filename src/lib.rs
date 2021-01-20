@@ -96,7 +96,7 @@
 //! is recursive so you can safely nest them arbitrarily.
 //!
 //! On the other hand, `miniserde::cbor` deserialization **does use recursion**.
-//! It is capped, so that a deeply nested object (_e.g._, 256 layers) cause a
+//! It is capped, so that a deeply nested object (_e.g._, 256 layers) causes a
 //! controlled deserialization error (no stack overflow). This is by design,
 //! since it doesn't seem possible to feature a design with:
 //!
@@ -139,7 +139,7 @@
 //! Miniserde provides just one attribute which is `rename`, and severely
 //! restricts the kinds of on-the-fly manipulation that are possible in custom
 //! impls. If you need any of this, use Serde -- it's a great library.
-
+#![cfg_attr(doc, feature(doc_cfg))]
 #![allow(
     clippy::needless_doctest_main,
     clippy::vec_init_then_push,
@@ -209,8 +209,12 @@ mod place;
 mod error;
 mod ignore;
 
+#[cfg(feature = "cbor")]
+#[cfg_attr(doc, doc(cfg(feature = "cbor")))]
 pub mod cbor;
 pub mod de;
+#[cfg(feature = "json")]
+#[cfg_attr(doc, doc(cfg(feature = "json")))]
 pub mod json;
 pub mod ser;
 
