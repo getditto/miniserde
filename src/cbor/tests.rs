@@ -1,3 +1,6 @@
+//! Most of these tests have been taken from
+//! https://github.com/pyfisch/cbor/blob/a218403a52e60c991313f429e4acc05cce81ce25/tests/canonical.rs
+
 use super::*;
 
 #[test]
