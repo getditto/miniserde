@@ -351,6 +351,56 @@ impl<T: Deserialize> Deserialize for Vec<T> {
     }
 }
 
+crate::with_Ns! {( $($N:expr),* $(,)? ) => (
+  $(
+    impl<T : Deserialize> Deserialize for [T; $N] {
+        fn begin(out: &mut Option<Self>) -> &mut dyn Visitor {
+            impl<T: Deserialize> Visitor for Place<[T; $N]> {
+                fn seq(&mut self) -> Result<Box<dyn Seq + '_>> {
+                    Ok(Box::new(ArrayBuilder {
+                        out: &mut self.out,
+                        vec: Vec::new(), // FIXME: do not use an allocation
+                        element: None,
+                    }))
+                }
+            }
+
+            struct ArrayBuilder<'a, T: 'a> {
+                out: &'a mut Option<[T; $N]>,
+                vec: Vec<T>,
+                element: Option<T>,
+            }
+
+            impl<'a, T> ArrayBuilder<'a, T> {
+                fn shift(&mut self) {
+                    if let Some(e) = self.element.take() {
+                        self.vec.push(e);
+                    }
+                }
+            }
+
+            impl<'a, T: Deserialize> Seq for ArrayBuilder<'a, T> {
+                fn element(&mut self) -> Result<&mut dyn Visitor> {
+                    self.shift();
+                    Ok(Deserialize::begin(&mut self.element))
+                }
+
+                fn finish(mut self: Box<Self>) -> Result<()> {
+                    self.shift();
+                    *self.out = Some(
+                        ::array_init::from_iter(self.vec.into_iter())
+                            .ok_or(crate::Error)?
+                    );
+                    Ok(())
+                }
+            }
+
+            Place::new(out)
+        }
+    }
+  )*
+)}
+
 impl<K, V, H> Deserialize for HashMap<K, V, H>
 where
     K: Deserialize + Hash + Eq,
