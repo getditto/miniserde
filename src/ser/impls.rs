@@ -146,6 +146,16 @@ impl<T: Serialize> Serialize for [T] {
     }
 }
 
+crate::with_Ns! {( $($N:expr),* $(,)? ) => (
+  $(
+    impl<T : Serialize> Serialize for [T; $N] {
+        fn view(&self) -> ValueView<'_> {
+            T::view_seq(self)
+        }
+    }
+  )*
+)}
+
 impl<T: Serialize> Serialize for Vec<T> {
     fn view(&self) -> ValueView<'_> {
         T::view_seq(&self[..])
