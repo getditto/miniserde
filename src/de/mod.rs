@@ -241,10 +241,19 @@ pub trait Visitor {
     }
 
     fn bytes(&mut self, xs: &[u8]) -> Result<()> {
-        err!(
-            "Cannot deserialize a `bytes` (got {:#x?}) at that position.",
-            xs
-        );
+        self.seq()
+            .and_then(|mut seq| {
+                for &x in xs {
+                    seq.element()?.int(x as _)?;
+                }
+                seq.finish()
+            })
+            .or_else(|_| {
+                err!(
+                    "Failed to deserialize a `bytes` (got {:#x?}) at that position.",
+                    xs
+                )
+            })
     }
 
     fn int(&mut self, i: i128) -> Result<()> {

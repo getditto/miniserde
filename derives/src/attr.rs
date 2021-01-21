@@ -25,6 +25,14 @@ fn attr_rename(attrs: &[Attribute]) -> Result<Option<String>> {
                         continue;
                     }
                 }
+                if value.path.is_ident("with") {
+                    if matches!(value.lit, Lit::Str(ref s) if s.value() == "serde_bytes") {
+                        // Thanks to `view_seq` and the impl for `u8`, we have already specialized
+                        // the "sequence of u8"s case, so no need for `serde_bytes`.
+                        // Thus, nothing to do:
+                        continue;
+                    }
+                }
             }
             return Err(Error::new_spanned(meta, "unsupported attribute"));
         }
