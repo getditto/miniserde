@@ -11,6 +11,10 @@ pub fn derive(input: DeriveInput) -> Result<TokenStream> {
             fields: Fields::Named(fields),
             ..
         }) => derive_struct(&input, &fields),
+        Data::Struct(DataStruct {
+            fields: Fields::Unit,
+            ..
+        }) => derive_struct(&input, &parse_quote!({})),
         Data::Enum(enumeration) => derive_enum(&input, enumeration),
         _ => Err(Error::new(
             Span::call_site(),
@@ -22,13 +26,10 @@ pub fn derive(input: DeriveInput) -> Result<TokenStream> {
 fn derive_struct(input: &DeriveInput, fields: &FieldsNamed) -> Result<TokenStream> {
     let ident = &input.ident;
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
-    let dummy = Ident::new(
-        &format!("_IMPL_MINISERIALIZE_FOR_{}", ident),
-        Span::call_site(),
-    );
+    let dummy = Ident::new(&format!("_IMPL_SERIALIZE_FOR_{}", ident), Span::call_site());
 
-    let fieldname = &fields.named.iter().map(|f| &f.ident).collect::<Vec<_>>();
-    let fieldstr = fields
+    let each_fieldname = &fields.named.iter().map(|f| &f.ident).collect::<Vec<_>>();
+    let each_fieldstr = fields
         .named
         .iter()
         .map(attr::name_of_field)
@@ -69,8 +70,8 @@ fn derive_struct(input: &DeriveInput, fields: &FieldsNamed) -> Result<TokenStrea
                     match __state {
                         #(
                             #index => miniserde_ditto::__private::Some((
-                                &#fieldstr,
-                                &self.data.#fieldname,
+                                &#each_fieldstr,
+                                &self.data.#each_fieldname,
                             )),
                         )*
                         _ => miniserde_ditto::__private::None,
@@ -79,7 +80,7 @@ fn derive_struct(input: &DeriveInput, fields: &FieldsNamed) -> Result<TokenStrea
                 #[allow(nonstandard_style)]
                 fn remaining(&self) -> usize
                 {
-                    0 #(+ { let #fieldname = 1; #fieldname })* - self.state
+                    0 #(+ { let #each_fieldname = 1; #each_fieldname })* - self.state
                 }
             }
         };
@@ -100,7 +101,7 @@ fn derive_enum(input: &DeriveInput, enumeration: &DataEnum) -> Result<TokenStrea
         Span::call_site(),
     );
 
-    let var_idents = enumeration
+    let each_var_ident = enumeration
         .variants
         .iter()
         .map(|variant| match variant.fields {
@@ -111,7 +112,7 @@ fn derive_enum(input: &DeriveInput, enumeration: &DataEnum) -> Result<TokenStrea
             )),
         })
         .collect::<Result<Vec<_>>>()?;
-    let names = enumeration
+    let each_name = enumeration
         .variants
         .iter()
         .map(attr::name_of_variant)
@@ -124,8 +125,8 @@ fn derive_enum(input: &DeriveInput, enumeration: &DataEnum) -> Result<TokenStrea
                 fn view(&self) -> miniserde_ditto::ser::ValueView<'_> {
                     match self {
                         #(
-                            #ident::#var_idents => {
-                                miniserde_ditto::ser::ValueView::Str(miniserde_ditto::__private::Cow::Borrowed(#names))
+                            #ident::#each_var_ident => {
+                                miniserde_ditto::ser::ValueView::Str(miniserde_ditto::__private::Cow::Borrowed(#each_name))
                             }
                         )*
                     }

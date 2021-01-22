@@ -207,7 +207,6 @@ mod careful;
 mod place;
 
 mod error;
-mod ignore;
 
 #[cfg(feature = "cbor")]
 #[cfg_attr(doc, doc(cfg(feature = "cbor")))]

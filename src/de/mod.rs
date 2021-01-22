@@ -182,6 +182,9 @@
 //! }
 //! ```
 
+pub use ignored_any::IgnoredAny;
+mod ignored_any;
+
 mod impls;
 
 use crate::Result;
@@ -247,7 +250,9 @@ pub trait Deserialize: Sized {
 #[allow(unused_variables)]
 pub trait Visitor {
     fn null(&mut self) -> Result<()> {
-        err!("Cannot deserialize a `null` at that position.");
+        self.map()
+            .and_then(|map| map.finish())
+            .or_else(|_| err!("Failed to deserialize a `null` as an empty map at that position.",))
     }
 
     fn boolean(&mut self, b: bool) -> Result<()> {
