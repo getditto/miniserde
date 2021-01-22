@@ -47,3 +47,17 @@ fn v2_attachment_chunk() {
     assert_eq!(serde_cbor::to_vec(instance).unwrap(), BYTES);
     assert_eq!(serde_cbor::from_slice::<V2AttachmentChunk>(BYTES).unwrap(), *instance)
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct _Generic<T> {
+    _it: T,
+}
+
+// // Enum
+// #[derive(Debug, Serialize, Deserialize)]
+// #[serde(untagged)]
+// pub enum NonExhaustive<T> {
+//     Known(T),
+//     #[serde(skip_serializing)]
+//     Unknown(serde::de::IgnoredAny),
+// }

@@ -11,6 +11,10 @@ pub fn derive(input: DeriveInput) -> Result<TokenStream> {
             fields: Fields::Named(fields),
             ..
         }) => derive_struct(&input, fields),
+        Data::Struct(DataStruct {
+            fields: Fields::Unit,
+            ..
+        }) => derive_struct(&input, &parse_quote!({})),
         Data::Enum(enumeration) => derive_enum(&input, enumeration),
         _ => Err(Error::new(
             Span::call_site(),
@@ -23,7 +27,7 @@ pub fn derive_struct(input: &DeriveInput, fields: &FieldsNamed) -> Result<TokenS
     let ident = &input.ident;
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
     let dummy = Ident::new(
-        &format!("_IMPL_MINIDESERIALIZE_FOR_{}", ident),
+        &format!("_IMPL_DESERIALIZE_FOR_{}", ident),
         Span::call_site(),
     );
 
@@ -39,6 +43,17 @@ pub fn derive_struct(input: &DeriveInput, fields: &FieldsNamed) -> Result<TokenS
     let (wrapper_impl_generics, wrapper_ty_generics, _) = wrapper_generics.split_for_impl();
     let bound = parse_quote!(miniserde_ditto::Deserialize);
     let bounded_where_clause = bound::where_clause_with_bound(&input.generics, bound);
+
+    let mb_deserialize_null = if fields.named.is_empty() {
+        Some(quote!(
+            fn null(&mut self) -> miniserde_ditto::Result<()> {
+                self.out = miniserde_ditto::__private::Some(#ident {});
+                miniserde_ditto::Result::Ok(())
+            }
+        ))
+    } else {
+        None
+    };
 
     Ok(quote! {
         #[allow(non_upper_case_globals)]
@@ -61,6 +76,8 @@ pub fn derive_struct(input: &DeriveInput, fields: &FieldsNamed) -> Result<TokenS
             }
 
             impl #impl_generics miniserde_ditto::de::Visitor for __Visitor #ty_generics #bounded_where_clause {
+                #mb_deserialize_null
+
                 fn map(&mut self) -> miniserde_ditto::Result<miniserde_ditto::__private::Box<dyn miniserde_ditto::de::Map + '_>> {
                     miniserde_ditto::__private::Ok(miniserde_ditto::__private::Box::new(__State {
                         #(
@@ -114,11 +131,11 @@ pub fn derive_enum(input: &DeriveInput, enumeration: &DataEnum) -> Result<TokenS
 
     let ident = &input.ident;
     let dummy = Ident::new(
-        &format!("_IMPL_MINIDESERIALIZE_FOR_{}", ident),
+        &format!("_IMPL_DESERIALIZE_FOR_{}", ident),
         Span::call_site(),
     );
 
-    let var_idents = enumeration
+    let each_var_ident = enumeration
         .variants
         .iter()
         .map(|variant| match variant.fields {
@@ -129,7 +146,7 @@ pub fn derive_enum(input: &DeriveInput, enumeration: &DataEnum) -> Result<TokenS
             )),
         })
         .collect::<Result<Vec<_>>>()?;
-    let names = enumeration
+    let each_name = enumeration
         .variants
         .iter()
         .map(attr::name_of_variant)
@@ -158,7 +175,7 @@ pub fn derive_enum(input: &DeriveInput, enumeration: &DataEnum) -> Result<TokenS
             impl miniserde_ditto::de::Visitor for __Visitor {
                 fn string(&mut self, s: &miniserde_ditto::__private::str) -> miniserde_ditto::Result<()> {
                     let value = match s {
-                        #( #names => #ident::#var_idents, )*
+                        #( #each_name => #ident::#each_var_ident, )*
                         _ => { return miniserde_ditto::__private::Err(miniserde_ditto::Error) },
                     };
                     self.__out = miniserde_ditto::__private::Some(value);
