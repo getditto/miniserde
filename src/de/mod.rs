@@ -186,6 +186,11 @@ mod impls;
 
 use crate::Result;
 
+use private::Private;
+mod private {
+    pub struct Private;
+}
+
 /// Trait for data structures that can be deserialized from a JSON string.
 ///
 /// [Refer to the module documentation for examples.][crate::de]
@@ -213,6 +218,25 @@ pub trait Deserialize: Sized {
     #[doc(hidden)]
     #[inline]
     fn default() -> Option<Self> {
+        None
+    }
+
+    // Specialization hacks to enable optimized deserialization into `u8` slices.
+    #[doc(hidden)]
+    #[::with_locals::with]
+    fn bytes_visitor_vec(
+        _: &'_ mut Vec<Self>,
+        _: Private,
+    ) -> Option<&'ref mut dyn FnMut(&'_ [u8])> {
+        None
+    }
+
+    #[doc(hidden)]
+    #[::with_locals::with]
+    fn bytes_visitor_slice(
+        _: &'_ mut [::core::mem::MaybeUninit<Self>],
+        _: Private,
+    ) -> Option<&'ref mut dyn FnMut(&'_ [u8]) -> Result<()>> {
         None
     }
 }
@@ -250,7 +274,7 @@ pub trait Visitor {
             })
             .or_else(|_| {
                 err!(
-                    "Failed to deserialize a `bytes` (got {:#x?}) at that position.",
+                    "Failed to deserialize a `bytes` (got {:#x?}) as a int-seq at that position.",
                     xs
                 )
             })

@@ -87,11 +87,53 @@ macro_rules! unsigned {
         }
     };
 }
-unsigned!(u8);
+// unsigned!(u8);
 unsigned!(u16);
 unsigned!(u32);
 unsigned!(u64);
 unsigned!(usize);
+
+impl Deserialize for u8 {
+    fn begin(out: &mut Option<Self>) -> &mut dyn Visitor {
+        impl Visitor for Place<u8> {
+            fn int(&mut self, i: i128) -> Result<()> {
+                if 0 <= i && i <= u8::max_value() as i128 {
+                    self.out = Some(i as u8);
+                    Ok(())
+                } else {
+                    err!("Cannot deserialize {:?} as a {}", i, stringify!(u8));
+                }
+            }
+        }
+        Place::new(out)
+    }
+
+    #[::with_locals::with]
+    fn bytes_visitor_vec(
+        out: &'_ mut Vec<u8>,
+        _: super::Private,
+    ) -> Option<&'ref mut dyn FnMut(&'_ [u8])> {
+        let ref mut visit_bytes = |xs: &'_ [u8]| *out = xs.to_vec();
+        Some(visit_bytes)
+    }
+
+    #[::with_locals::with]
+    fn bytes_visitor_slice(
+        out: &'_ mut [::core::mem::MaybeUninit<u8>],
+        _: super::Private,
+    ) -> Option<&'ref mut dyn FnMut(&'_ [u8]) -> Result<()>> {
+        let ref mut visit_bytes = |xs: &'_ [u8]| {
+            if xs.len() != out.len() {
+                Err(crate::Error)
+            } else {
+                use ::uninit::prelude::*;
+                out.as_out().copy_from_slice(xs);
+                Ok(())
+            }
+        };
+        Some(visit_bytes)
+    }
+}
 
 macro_rules! float {
     ($ty:ident) => {
@@ -308,9 +350,31 @@ impl<A: Deserialize, B: Deserialize> Deserialize for (A, B) {
     }
 }
 
+struct DefaultImpl;
+impl Visitor for DefaultImpl {}
+
 impl<T: Deserialize> Deserialize for Vec<T> {
     fn begin(out: &mut Option<Self>) -> &mut dyn Visitor {
         impl<T: Deserialize> Visitor for Place<Vec<T>> {
+            fn bytes(self: &mut Place<Vec<T>>, xs: &'_ [u8]) -> Result<()> {
+                let mut out: Vec<T> = vec![];
+                let ret_out = T::with_bytes_visitor_vec(&mut out, super::Private, |mb_visitor| {
+                    match mb_visitor {
+                        Some(visit_bytes) => {
+                            visit_bytes(xs);
+                            true
+                        }
+                        None => false,
+                    }
+                });
+                if ret_out {
+                    self.out = Some(out);
+                    Ok(())
+                } else {
+                    DefaultImpl.bytes(xs)
+                }
+            }
+
             fn seq(&mut self) -> Result<Box<dyn Seq + '_>> {
                 Ok(Box::new(VecBuilder {
                     out: &mut self.out,
@@ -356,6 +420,38 @@ crate::with_Ns! {( $($N:expr),* $(,)? ) => (
     impl<T : Deserialize> Deserialize for [T; $N] {
         fn begin(out: &mut Option<Self>) -> &mut dyn Visitor {
             impl<T: Deserialize> Visitor for Place<[T; $N]> {
+                fn bytes(self: &mut Place<[T; $N]>, xs: &'_ [u8]) -> Result<()> {
+                    let mut out: [::core::mem::MaybeUninit<T>; $N] =
+                        ::uninit::uninit_array![_; $N]
+                    ;
+                    let ret_out = T::with_bytes_visitor_slice(
+                        &mut out,
+                        super::Private,
+                        |mb_visitor| match mb_visitor {
+                            Some(visit_bytes) => visit_bytes(xs).map(|()| true),
+                            None => Ok(false),
+                        },
+                    )?;
+                    if ret_out {
+                        self.out = Some(unsafe {
+                            // # Safety
+                            //
+                            //   - The only way the `with_bytes…` call yields
+                            //     `Ok(())` is through a local impl,
+                            //     since the `Private` parameter makes it
+                            //     impossible for a downstream user to override.
+                            //
+                            //   - The only local override of that method is on
+                            //     `T = u8`, which does initialize the slice
+                            //     when yielding `Ok(())` (and `u8` is `Copy`).
+                            ::core::mem::transmute_copy(&out)
+                        });
+                        Ok(())
+                    } else {
+                        DefaultImpl.bytes(xs)
+                    }
+                }
+
                 fn seq(&mut self) -> Result<Box<dyn Seq + '_>> {
                     Ok(Box::new(ArrayBuilder {
                         out: &mut self.out,
