@@ -14,7 +14,7 @@ pub fn derive(input: DeriveInput) -> Result<TokenStream> {
         Data::Struct(DataStruct {
             fields: Fields::Unit,
             ..
-        }) => derive_struct(&input, &parse_quote!({})),
+        }) => derive_unit(&input),
         Data::Enum(enumeration) => derive_enum(&input, enumeration),
         _ => Err(Error::new(
             Span::call_site(),
@@ -130,6 +130,29 @@ fn derive_enum(input: &DeriveInput, enumeration: &DataEnum) -> Result<TokenStrea
                             }
                         )*
                     }
+                }
+            }
+        };
+    })
+}
+
+fn derive_unit(input: &DeriveInput) -> Result<TokenStream> {
+    let ident = &input.ident;
+    let (intro_generics, fwd_generics, where_clause) = input.generics.split_for_impl();
+    let dummy = Ident::new(&format!("_IMPL_SERIALIZE_FOR_{}", ident), Span::call_site());
+
+    Ok(quote! {
+        #[allow(non_upper_case_globals)]
+        const #dummy: () = {
+            impl #intro_generics
+                miniserde_ditto::Serialize
+            for
+                #ident #fwd_generics #where_clause
+            {
+                fn view (self: &'_ Self)
+                  -> miniserde_ditto::ser::ValueView<'_>
+                {
+                    miniserde_ditto::ser::ValueView::Null
                 }
             }
         };
