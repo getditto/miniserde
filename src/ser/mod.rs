@@ -167,10 +167,36 @@ pub trait Seq<'view> {
     fn remaining(&self) -> usize;
 }
 
+impl<'view, T: 'view> Seq<'view> for T
+where
+    Self: ExactSizeIterator<Item = &'view dyn Serialize>,
+{
+    fn remaining(&self) -> usize {
+        self.len()
+    }
+
+    fn next(&mut self) -> Option<&'view dyn Serialize> {
+        Iterator::next(self)
+    }
+}
+
 /// Trait that can iterate key-value entries of a map or struct.
 ///
 /// [Refer to the module documentation for examples.][crate::ser]
 pub trait Map<'view> {
     fn next(&mut self) -> Option<(&'view dyn Serialize, &'view dyn Serialize)>;
     fn remaining(&self) -> usize;
+}
+
+impl<'view, T: 'view> Map<'view> for T
+where
+    Self: ExactSizeIterator<Item = (&'view dyn Serialize, &'view dyn Serialize)>,
+{
+    fn remaining(&self) -> usize {
+        self.len()
+    }
+
+    fn next(&mut self) -> Option<(&'view dyn Serialize, &'view dyn Serialize)> {
+        Iterator::next(self)
+    }
 }
