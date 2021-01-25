@@ -225,6 +225,8 @@ pub trait Deserialize: Sized {
     }
 
     // Specialization hacks to enable optimized deserialization into `u8` slices.
+    // Not public API either, which is enforced thanks to the `Private`
+    // parameter.
     #[doc(hidden)]
     #[::with_locals::with]
     fn bytes_visitor_vec(
@@ -252,7 +254,7 @@ pub trait Visitor {
     fn null(&mut self) -> Result<()> {
         self.map()
             .and_then(|map| map.finish())
-            .or_else(|_| err!("Failed to deserialize a `null` as an empty map at that position.",))
+            .or_else(|_| err!("Failed to deserialize a `null` as an empty map at that position."))
     }
 
     fn boolean(&mut self, b: bool) -> Result<()> {
