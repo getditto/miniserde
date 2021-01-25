@@ -1,10 +1,12 @@
 pub use ::std::{
+    self,
     borrow::Cow,
     boxed::Box,
     ops::FnMut,
     option::Option::{self, None, Some},
     result::Result::{Err, Ok},
     string::String,
+    stringify, vec,
     vec::Vec,
 };
 

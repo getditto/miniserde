@@ -198,6 +198,10 @@ pub use ::derives::*;
 #[doc(hidden)]
 pub mod __private;
 
+/// Not public API.
+#[doc(hidden)]
+pub use __private as __;
+
 mod aliased_box;
 
 #[macro_use]

@@ -1,9 +1,7 @@
 use crate::{attr, bound};
-use proc_macro2::{Span, TokenStream};
-use quote::quote;
-use syn::{
-    parse_quote, Data, DataEnum, DataStruct, DeriveInput, Error, Fields, FieldsNamed, Ident, Result,
-};
+use ::proc_macro2::{Span, TokenStream};
+use ::quote::{format_ident, quote};
+use ::syn::{spanned::Spanned, Result, *};
 
 pub fn derive(input: DeriveInput) -> Result<TokenStream> {
     match &input.data {
@@ -46,7 +44,7 @@ fn derive_struct(input: &DeriveInput, fields: &FieldsNamed) -> Result<TokenStrea
         const #dummy: () = {
             impl #impl_generics miniserde_ditto::Serialize for #ident #ty_generics #bounded_where_clause {
                 fn view(&self) -> miniserde_ditto::ser::ValueView<'_> {
-                    miniserde_ditto::ser::ValueView::Map(miniserde_ditto::__private::Box::new(__Map {
+                    miniserde_ditto::ser::ValueView::Map(miniserde_ditto::__::Box::new(__Map {
                         data: self,
                         state: 0,
                     }))
@@ -55,12 +53,12 @@ fn derive_struct(input: &DeriveInput, fields: &FieldsNamed) -> Result<TokenStrea
 
             struct __Map #wrapper_impl_generics #where_clause {
                 data: &'__a #ident #ty_generics,
-                state: miniserde_ditto::__private::usize,
+                state: miniserde_ditto::__::usize,
             }
 
             impl #wrapper_impl_generics miniserde_ditto::ser::Map<'__a> for __Map #wrapper_ty_generics #bounded_where_clause {
                 fn next (self: &'_ mut Self)
-                  -> miniserde_ditto::__private::Option<(
+                  -> miniserde_ditto::__::Option<(
                         &'__a dyn miniserde_ditto::Serialize,
                         &'__a dyn miniserde_ditto::Serialize,
                     )>
@@ -69,12 +67,12 @@ fn derive_struct(input: &DeriveInput, fields: &FieldsNamed) -> Result<TokenStrea
                     self.state = __state + 1;
                     match __state {
                         #(
-                            #index => miniserde_ditto::__private::Some((
+                            #index => miniserde_ditto::__::Some((
                                 &#each_fieldstr,
                                 &self.data.#each_fieldname,
                             )),
                         )*
-                        _ => miniserde_ditto::__private::None,
+                        _ => miniserde_ditto::__::None,
                     }
                 }
                 #[allow(nonstandard_style)]
@@ -86,54 +84,211 @@ fn derive_struct(input: &DeriveInput, fields: &FieldsNamed) -> Result<TokenStrea
         };
     })
 }
+use attr::EnumTaggingMode;
 
+#[allow(nonstandard_style)]
 fn derive_enum(input: &DeriveInput, enumeration: &DataEnum) -> Result<TokenStream> {
-    if input.generics.lt_token.is_some() || input.generics.where_clause.is_some() {
-        return Err(Error::new(
-            Span::call_site(),
-            "Enums with generics are not supported",
-        ));
-    }
+    let tagging_mode = EnumTaggingMode::from_attrs(&input.attrs)?;
+    // if input.generics.lt_token.is_some() || input.generics.where_clause.is_some() {
+    //     return Err(Error::new(
+    //         Span::call_site(),
+    //         "Enums with generics are not supported",
+    //     ));
+    // }
 
-    let ident = &input.ident;
+    let Enum = &input.ident;
+    let (intro_generics, fwd_generics, _) = input.generics.split_for_impl();
+    let bound = parse_quote!(miniserde_ditto::Serialize);
+    let where_clause = bound::where_clause_with_bound(&input.generics, bound);
     let dummy = Ident::new(
-        &format!("_IMPL_MINISERIALIZE_FOR_{}", ident),
+        &format!("_IMPL_MINISERIALIZE_FOR_{}", Enum),
         Span::call_site(),
     );
 
-    let each_var_ident = enumeration
+    let is_trivial_enum = enumeration
         .variants
         .iter()
-        .map(|variant| match variant.fields {
-            Fields::Unit => Ok(&variant.ident),
-            _ => Err(Error::new_spanned(
-                variant,
-                "Invalid variant: only simple enum variants without fields are supported",
-            )),
-        })
-        .collect::<Result<Vec<_>>>()?;
-    let each_name = enumeration
-        .variants
-        .iter()
-        .map(attr::name_of_variant)
-        .collect::<Result<Vec<_>>>()?;
+        .all(|variant| matches!(variant.fields, Fields::Unit));
+    let view_body = if is_trivial_enum {
+        let each_var_ident = enumeration
+            .variants
+            .iter()
+            .map(|it| &it.ident)
+            .collect::<Vec<_>>();
+        let each_name = enumeration
+            .variants
+            .iter()
+            .map(attr::name_of_variant)
+            .collect::<Result<Vec<_>>>()?;
 
-    Ok(quote! {
+        quote!(
+            match self {
+                #(
+                    #Enum::#each_var_ident => {
+                        miniserde_ditto::ser::ValueView::Str(miniserde_ditto::__::Cow::Borrowed(#each_name))
+                    }
+                )*
+            }
+        )
+    } else {
+        // Non-trivial enum case:
+        let match_arms = enumeration.variants.iter().map(|variant| {
+            let Variant = &variant.ident;
+            let (pattern, each_binding) = match variant.fields {
+                Fields::Named(FieldsNamed { ref named, .. }) => {
+                    let each_binding =
+                        named
+                            .iter()
+                            .map(|it| it.ident.as_ref().unwrap().clone())
+                            .collect::<Vec<Ident>>()
+                    ;
+                    (
+                        quote!(
+                            #( #each_binding ),*
+                        ),
+                        each_binding,
+                    )
+                },
+                Fields::Unit => (
+                    quote!( .. ),
+                    vec![],
+                ),
+                Fields::Unnamed(FieldsUnnamed { ref unnamed, .. }) => {
+                    let mut bindings = vec![];
+                    let pattern =
+                        unnamed
+                            .iter()
+                            .enumerate()
+                            .map(|(i, field)| {
+                                let idx = Index { index: i as _, span: field.ty.span() };
+                                let binding = format_ident!(
+                                    "_{}", i, span = idx.span,
+                                );
+                                let ret = quote!(
+                                    #idx : #binding,
+                                );
+                                bindings.push(binding);
+                                ret
+                            })
+                            .collect::<TokenStream>()
+                    ;
+                    if true { todo!() } else { (pattern, bindings) }
+                },
+            };
+            match tagging_mode {
+                | EnumTaggingMode::ExternallyTagged => quote!(
+                    #Enum::#Variant { .. } => miniserde_ditto::ser::ValueView::Map(miniserde_ditto::__::Box::new({
+                        #[repr(transparent)]
+                        struct WrapEnum #intro_generics /* = */ (
+                            #Enum #fwd_generics,
+                        )
+                        #where_clause
+                        ;
+
+                        impl #intro_generics
+                            miniserde_ditto::Serialize
+                        for
+                            WrapEnum #fwd_generics
+                        #where_clause
+                        {
+                            fn view (self: &'_ Self)
+                              -> miniserde_ditto::ser::ValueView<'_>
+                            {
+                                match &self.0 {
+                                    #Enum::#Variant { #pattern } => {
+                                        miniserde_ditto::ser::ValueView::Map(miniserde_ditto::__::Box::new(
+                                            miniserde_ditto::__::std::iter::IntoIterator::into_iter(miniserde_ditto::__::vec![#(
+                                                (
+                                                    &miniserde_ditto::__::stringify!(#each_binding) as &dyn miniserde_ditto::ser::Serialize,
+                                                    #each_binding as &dyn miniserde_ditto::ser::Serialize,
+                                                ),
+                                            )*])
+                                        ))
+                                    },
+                                    _ => unsafe {
+                                        /// Safety: the only way to obtain a reference
+                                        /// to this kind of `WrapEnum` is through
+                                        /// the following cast, which has had its variant
+                                        /// already checked.
+                                        miniserde_ditto::__::std::hint::unreachable_unchecked()
+                                    },
+                                }
+                            }
+                        }
+
+                        miniserde_ditto::__::std::iter::once((
+                            &miniserde_ditto::__::stringify!(#Variant) as &dyn miniserde_ditto::ser::Serialize,
+                            unsafe {
+                                /// # Safety
+                                ///  - `WrapEnum` is a `#[repr(transparent)]` wrapper;
+                                ///  - `WrapEnum` carries no safety invariants.
+                                extern {}
+
+                                miniserde_ditto::__::std::mem::transmute::<
+                                    &'__serde_view #Enum #fwd_generics,
+                                    &'__serde_view WrapEnum #fwd_generics,
+                                >(self)
+                            } as &dyn miniserde_ditto::ser::Serialize,
+                        ))
+                    })),
+                ),
+
+                | EnumTaggingMode::Untagged => quote!(
+                    #Enum::#Variant { #pattern } => miniserde_ditto::ser::ValueView::Map(Box::new({
+                        miniserde_ditto::__::std::iter::IntoIterator::into_iter(miniserde_ditto::__::vec![#(
+                            (
+                                &miniserde_ditto::__::stringify!(#each_binding) as &dyn miniserde_ditto::ser::Serialize,
+                                #each_binding as &dyn miniserde_ditto::ser::Serialize,
+                            ),
+                        )*])
+                    })),
+                ),
+
+                | EnumTaggingMode::InternallyTagged { ref tag_name, content_name: None } => quote!(
+                    #Enum::#Variant { #pattern } => miniserde_ditto::ser::ValueView::Map(Box::new({
+                        miniserde_ditto::__::std::iter::IntoIterator::into_iter(miniserde_ditto::__::std::vec![
+                            (
+                                &#tag_name as &dyn miniserde_ditto::ser::Serialize,
+                                &miniserde_ditto::__::stringify!(#Variant) as &dyn miniserde_ditto::ser::Serialize,
+                            ),
+                            #(
+                                (
+                                    &miniserde_ditto::__::stringify!(#each_binding) as &dyn miniserde_ditto::ser::Serialize,
+                                    #each_binding as &dyn miniserde_ditto::ser::Serialize,
+                                ),
+                            )*
+                        ])
+                    })),
+                ),
+
+                | EnumTaggingMode::InternallyTagged { .. } => todo!(),
+            }
+        });
+
+        quote!(
+            /// FIXME: do this in a more performant fashion
+            extern {}
+            match self { #(#match_arms)* }
+        )
+    };
+    Ok(quote!(
         #[allow(non_upper_case_globals)]
         const #dummy: () = {
-            impl miniserde_ditto::Serialize for #ident {
-                fn view(&self) -> miniserde_ditto::ser::ValueView<'_> {
-                    match self {
-                        #(
-                            #ident::#each_var_ident => {
-                                miniserde_ditto::ser::ValueView::Str(miniserde_ditto::__private::Cow::Borrowed(#each_name))
-                            }
-                        )*
-                    }
+            impl #intro_generics
+                miniserde_ditto::Serialize
+            for
+                #Enum #fwd_generics
+            #where_clause
+            {
+                fn view<'__serde_view> (
+                    self: &'__serde_view Self,
+                ) -> miniserde_ditto::ser::ValueView<'__serde_view>
+                {
+                    #view_body
                 }
             }
         };
-    })
+    ))
 }
 
 fn derive_unit(input: &DeriveInput) -> Result<TokenStream> {
