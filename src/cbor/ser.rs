@@ -543,7 +543,7 @@ mod tests {
             // only copies the byte slice contents provided the writer allows it),
             // we `unsafe`-ly fake a gigantic slice by using a writer
             // that will saturate right after the header has been written.
-            #[cfg(target_pointer_width = "64")] #[cfg_attr(rustfmt, rustfmt::skip)]
+            #[cfg(all(not(miri), target_pointer_width = "64"))] #[cfg_attr(rustfmt, rustfmt::skip)]
             unsafe {
                 let fake_huge_byte_seq: &'_ [u8] = ::core::slice::from_raw_parts(
                     0x1 as _,

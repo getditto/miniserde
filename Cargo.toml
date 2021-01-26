@@ -22,7 +22,7 @@ itoa = { version = "0.4.3", features = ["i128"] }
 half = { version = "1.6.0", features = [] }
 ryu = "1.0"
 with_locals = "0.3.0-rc1"
-uninit = "0.4.0"
+uninit = "0.4.1-dev"
 array-init = "1.0.0"
 
 [dependencies.derives]
