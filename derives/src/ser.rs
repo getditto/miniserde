@@ -101,7 +101,7 @@ fn derive_enum(input: &DeriveInput, enumeration: &DataEnum) -> Result<TokenStrea
     let bound = parse_quote!(miniserde_ditto::Serialize);
     let where_clause = bound::where_clause_with_bound(&input.generics, bound);
     let dummy = Ident::new(
-        &format!("_IMPL_MINISERIALIZE_FOR_{}", Enum),
+        &format!("_IMPL_SERIALIZE_FOR_{}", Enum),
         Span::call_site(),
     );
 

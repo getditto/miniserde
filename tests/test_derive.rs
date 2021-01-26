@@ -1,4 +1,4 @@
-use miniserde_ditto::{json, Deserialize, Serialize};
+use ::miniserde_ditto::{json, Deserialize, Serialize};
 
 #[derive(PartialEq, Debug, Serialize, Deserialize)]
 enum Tag {
@@ -22,6 +22,7 @@ struct Nested {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn test_de() {
     let j = r#" {"x": "X", "t1": "A", "t2": "renamedB", "n": {"y": ["Y", "Y"]}} "#;
     let actual: Example = json::from_str(j).unwrap();
@@ -53,17 +54,18 @@ fn test_ser() {
     assert_eq!(actual, expected);
 }
 
-#[allow(dead_code)]
 mod complex_enums {
+    use super::*;
+
     #[test]
     fn externally_tagged() {
-        #[derive(Debug, ::miniserde_ditto::Serialize)]
+        #[derive(Debug, Serialize)]
         enum Message<T> {
             Request { id: T, method: String },
-            Response { id: String },
+            _Response { id: T },
         }
         assert_eq!(
-            ::miniserde_ditto::json::to_string(&Message::Request {
+            json::to_string(&Message::Request {
                 id: 42,
                 method: String::from("foo"),
             })
@@ -74,14 +76,14 @@ mod complex_enums {
 
     #[test]
     fn internally_tagged_no_content() {
-        #[derive(Debug, ::miniserde_ditto::Serialize)]
+        #[derive(Debug, Serialize)]
         #[serde(tag = "kind")]
         enum Message<T> {
             Request { id: T, method: String },
-            Response { id: String },
+            _Response { id: T },
         }
         assert_eq!(
-            ::miniserde_ditto::json::to_string(&Message::Request {
+            json::to_string(&Message::Request {
                 id: 42,
                 method: String::from("foo"),
             })
@@ -92,14 +94,14 @@ mod complex_enums {
 
     #[test]
     fn untagged() {
-        #[derive(Debug, ::miniserde_ditto::Serialize)]
+        #[derive(Debug, Serialize)]
         #[serde(untagged)]
         enum Message<T> {
             Request { id: T, method: String },
-            Response { id: String },
+            _Response { id: T },
         }
         assert_eq!(
-            ::miniserde_ditto::json::to_string(&Message::Request {
+            json::to_string(&Message::Request {
                 id: 42,
                 method: String::from("foo"),
             })

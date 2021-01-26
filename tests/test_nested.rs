@@ -1,6 +1,7 @@
 use miniserde_ditto::json::{self, Value};
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn test_round_trip_deeply_nested() {
     let mut j = String::new();
     for _ in 0..100_000 {

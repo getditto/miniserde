@@ -50,7 +50,7 @@ pub fn to_string<'value>(value: &'value dyn Serialize) -> crate::Result<String> 
                             byte /= 10;
                         }
                         ::core::str::from_utf8(&buf[cursor..]).unwrap()
-                    };
+                    }
                     let ref mut buf = [0; 3];
                     out.push_str(fmt_byte(fst, buf));
                     bytes.for_each(|b| {
