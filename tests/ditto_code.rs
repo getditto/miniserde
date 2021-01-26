@@ -53,11 +53,11 @@ pub struct _Generic<T> {
     _it: T,
 }
 
-// // Enum
-// #[derive(Debug, Serialize, Deserialize)]
-// #[serde(untagged)]
-// pub enum NonExhaustive<T> {
-//     Known(T),
-//     #[serde(skip_serializing)]
-//     Unknown(serde::de::IgnoredAny),
-// }
+// Enum
+#[derive(Debug, Serialize)] // TODO: Deserialize
+#[serde(untagged)]
+pub enum NonExhaustive<T> {
+    Known(T),
+    // #[serde(skip_serializing)]
+    Unknown, // (serde::de::IgnoredAny),
+}

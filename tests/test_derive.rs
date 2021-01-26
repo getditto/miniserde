@@ -109,4 +109,67 @@ mod complex_enums {
             r#"{"id":42,"method":"foo"}"#,
         );
     }
+
+    mod new_types {
+        use super::*;
+
+        #[derive(Debug, Serialize)]
+        struct Request<T> {
+            id: T,
+            method: String,
+        }
+
+        #[test]
+        fn externally_tagged() {
+            #[derive(Debug, Serialize)]
+            enum Message<T> {
+                Request(Request<T>),
+                _Response { id: T },
+            }
+            assert_eq!(
+                json::to_string(&Message::Request(Request {
+                    id: 42,
+                    method: String::from("foo"),
+                }))
+                .unwrap(),
+                r#"{"Request":{"id":42,"method":"foo"}}"#,
+            );
+        }
+
+        #[test]
+        fn internally_tagged_no_content() {
+            #[derive(Debug, Serialize)]
+            #[serde(tag = "kind")]
+            enum Message<T> {
+                Request(Request<T>),
+                _Response { id: T },
+            }
+            assert_eq!(
+                json::to_string(&Message::Request(Request {
+                    id: 42,
+                    method: String::from("foo"),
+                }))
+                .unwrap(),
+                r#"{"kind":"Request","id":42,"method":"foo"}"#,
+            );
+        }
+
+        #[test]
+        fn untagged() {
+            #[derive(Debug, Serialize)]
+            #[serde(untagged)]
+            enum Message<T> {
+                Request(Request<T>),
+                _Response { id: T },
+            }
+            assert_eq!(
+                json::to_string(&Message::Request(Request {
+                    id: 42,
+                    method: String::from("foo"),
+                }))
+                .unwrap(),
+                r#"{"id":42,"method":"foo"}"#,
+            );
+        }
+    }
 }
