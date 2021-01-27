@@ -110,6 +110,8 @@ fn derive_enum(input: &DeriveInput, enumeration: &DataEnum) -> Result<TokenStrea
         // Non-trivial enum case:
         let match_arms = enumeration.variants.iter().map(|variant| Ok({
             let Variant = &variant.ident;
+            let Variant_str = attr::name_of_variant(variant)?;
+            let mut each_binding_str = vec![];
             let (pattern, each_binding) = match variant.fields {
                 Fields::Named(FieldsNamed { ref named, .. }) => {
                     let each_binding =
@@ -117,6 +119,12 @@ fn derive_enum(input: &DeriveInput, enumeration: &DataEnum) -> Result<TokenStrea
                             .iter()
                             .map(|it| it.ident.as_ref().unwrap().clone())
                             .collect::<Vec<Ident>>()
+                    ;
+                    each_binding_str =
+                        named
+                            .iter()
+                            .map(attr::name_of_field)
+                            .collect::<Result<_>>()?
                     ;
                     (
                         quote!(
@@ -252,7 +260,7 @@ fn derive_enum(input: &DeriveInput, enumeration: &DataEnum) -> Result<TokenStrea
                             #c::ser::ValueView::Map(#c::__::Box::new(
                                 #c::__::std::iter::IntoIterator::into_iter(#c::__::vec![#(
                                     (
-                                        &#c::__::stringify!(#each_binding) as &dyn #c::Serialize,
+                                        &#each_binding_str as &dyn #c::Serialize,
                                         #each_binding as &dyn #c::Serialize,
                                     ),
                                 )*])
@@ -263,7 +271,7 @@ fn derive_enum(input: &DeriveInput, enumeration: &DataEnum) -> Result<TokenStrea
                     quote!(
                         #Enum::#Variant { #pattern } => #c::ser::ValueView::Map(#c::__::Box::new(
                             #c::__::std::iter::once((
-                                &#c::__::stringify!(#Variant) as &dyn #c::Serialize,
+                                &#Variant_str as &dyn #c::Serialize,
                                 #payload,
                             ))
                         )),
@@ -297,7 +305,7 @@ fn derive_enum(input: &DeriveInput, enumeration: &DataEnum) -> Result<TokenStrea
                             #c::ser::ValueView::Map(#c::__::Box::new(
                                 #c::__::std::iter::IntoIterator::into_iter(#c::__::vec![#(
                                     (
-                                        &#c::__::stringify!(#each_binding) as &dyn #c::Serialize,
+                                        &#each_binding_str as &dyn #c::Serialize,
                                         #each_binding as &dyn #c::Serialize,
                                     ),
                                 )*])
@@ -346,7 +354,7 @@ fn derive_enum(input: &DeriveInput, enumeration: &DataEnum) -> Result<TokenStrea
                             #c::__::std::iter::IntoIterator::into_iter(#c::__::vec![
                                 #(
                                     (
-                                        &#c::__::stringify!(#each_binding) as &dyn #c::Serialize,
+                                        &#each_binding_str as &dyn #c::Serialize,
                                         #each_binding as &dyn #c::Serialize,
                                     ),
                                 )*
@@ -362,7 +370,7 @@ fn derive_enum(input: &DeriveInput, enumeration: &DataEnum) -> Result<TokenStrea
                                 } else {
                                     (
                                         &#tag_name as &dyn #c::Serialize,
-                                        &#c::__::stringify!(#Variant) as &dyn #c::Serialize,
+                                        &#Variant_str as &dyn #c::Serialize,
                                     )
                                 })
                         })),
