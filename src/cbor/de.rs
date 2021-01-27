@@ -60,7 +60,7 @@ const MAX_DEPTH: u16 = 256;
 
 fn from_slice_impl<'bytes>(
     bytes: &'_ mut ::core::slice::Iter<'bytes, u8>,
-    visitor: &mut dyn Visitor,
+    visitor: &'_ mut dyn Visitor,
 ) -> Option<()> {
     use helpers::*;
 
@@ -69,7 +69,7 @@ fn from_slice_impl<'bytes>(
     drop(from_slice_impl);
     fn recurse_checked<'bytes>(
         bytes: &'_ mut ::core::slice::Iter<'bytes, u8>,
-        visitor: &mut dyn Visitor,
+        visitor: &'_ mut dyn Visitor,
     ) -> Option<()> {
         thread_local! {
             static CUR_DEPTH: ::core::cell::Cell<u16> = 0.into();
@@ -207,9 +207,9 @@ fn from_slice_impl<'bytes>(
         }
 
         (major::FLOAT_BOOL_OR_UNIT, t @ tag::FLOAT!()) => {
-            use ::half::f16;
             let f: f64 = match t {
                 tag::FLOAT::_16 => {
+                    use ::half::f16;
                     f16::from_bits(u16::from_be_bytes(multi_bytes!(bytes, 2))).into()
                 }
                 tag::FLOAT::_32 => {

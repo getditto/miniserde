@@ -61,12 +61,19 @@ mod complex_enums {
     fn externally_tagged() {
         #[derive(Debug, Serialize)]
         enum Message<T> {
-            Request { id: T, method: String },
-            _Response { id: T },
+            #[serde(rename = "Request")]
+            Rekwest {
+                #[serde(rename = "id")]
+                identifier: T,
+                method: String,
+            },
+            _Response {
+                id: T,
+            },
         }
         assert_eq!(
-            json::to_string(&Message::Request {
-                id: 42,
+            json::to_string(&Message::Rekwest {
+                identifier: 42,
                 method: String::from("foo"),
             })
             .unwrap(),

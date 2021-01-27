@@ -275,40 +275,37 @@ mod tests {
         Serialize,
     };
 
-    macro_rules! assert_eq_hex {
-        (
+    #[cfg_attr(rustfmt, rustfmt::skip)]
+    macro_rules! assert_eq_hex {(
         $left:expr,
         $right:expr $(,)?
-    ) => {
-            match (&$left[..], &$right[..]) {
-                (ref left, ref right) => {
-                    if <[u8] as ::core::cmp::PartialEq>::ne(left, right) {
-                        panic!(
-                            "assertion failed: (`{}` == `{}`)\n{}]",
-                            stringify!($left),
-                            stringify!($right),
-                            (0..left.len().max(right.len()))
-                                .map(|i| match (left.get(i), right.get(i)) {
-                                    (Some(l), Some(r)) => format!(
-                                        "  {:01}|{:02x} – {:01}|{:02x},\n",
-                                        l >> 5,
-                                        l & 0x1f,
-                                        r >> 5,
-                                        r & 0x1f
-                                    ),
-                                    (Some(l), _) =>
-                                        format!("  {:01}|{:02x} - ____,\n", l >> 5, l & 0x1f),
-                                    (_, Some(r)) =>
-                                        format!("____ - {:01}|{:02x},\n", r >> 5, r & 0x1f),
-                                    _ => unreachable!(),
-                                })
-                                .collect::<String>(),
-                        );
-                    }
+    ) => (
+        match (&$left[..], &$right[..]) {
+            (ref left, ref right) => {
+                if <[u8] as ::core::cmp::PartialEq>::ne(left, right) {
+                    panic!(
+                        "assertion failed: (`{}` == `{}`)\n{}]",
+                        stringify!($left),
+                        stringify!($right),
+                        (0..left.len().max(right.len()))
+                            .map(|i| match (left.get(i), right.get(i)) {
+                                (Some(l), Some(r)) => format!(
+                                    "  {:01}|{:02x} – {:01}|{:02x},\n",
+                                    l >> 5, l & 0x1f,
+                                    r >> 5, r & 0x1f
+                                ),
+                                (Some(l), _) =>
+                                    format!("  {:01}|{:02x} - ____,\n", l >> 5, l & 0x1f),
+                                (_, Some(r)) =>
+                                    format!("____ - {:01}|{:02x},\n", r >> 5, r & 0x1f),
+                                _ => unreachable!(),
+                            })
+                            .collect::<String>(),
+                    );
                 }
             }
-        };
-    }
+        }
+    )}
 
     #[test]
     fn test_str() {
