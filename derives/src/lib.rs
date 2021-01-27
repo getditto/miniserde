@@ -1,3 +1,4 @@
+#![allow(nonstandard_style)]
 #![allow(
     clippy::module_name_repetitions,
     clippy::needless_pass_by_value,
@@ -26,4 +27,9 @@ pub fn derive_deserialize(input: TokenStream) -> TokenStream {
     de::derive(parse_macro_input!(input as DeriveInput))
         .unwrap_or_else(|err| err.to_compile_error())
         .into()
+}
+
+/// Our own (frontend) crate.
+fn frontend() -> ::proc_macro2::TokenStream {
+    ::quote::quote!(miniserde_ditto)
 }

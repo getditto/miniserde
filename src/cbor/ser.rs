@@ -1,4 +1,5 @@
-#![allow(unused)]#![warn(unused_must_use)]
+#![allow(unused)]
+#![warn(unused_must_use)]
 
 use crate::{
     ser::{Map, Seq, Serialize, ValueView},
