@@ -21,13 +21,8 @@ pub fn derive(input: DeriveInput) -> Result<TokenStream> {
     }
 }
 
-/// Our own (frontend) crate.
-fn frontend_crate() -> TokenStream {
-    quote!(miniserde_ditto)
-}
-
 fn derive_struct(input: &DeriveInput, fields: &FieldsNamed) -> Result<TokenStream> {
-    let c = frontend_crate();
+    let c = crate::frontend();
 
     let ident = &input.ident;
     let dummy = Ident::new(&format!("_IMPL_SERIALIZE_FOR_{}", ident), Span::call_site());
@@ -67,11 +62,10 @@ fn derive_struct(input: &DeriveInput, fields: &FieldsNamed) -> Result<TokenStrea
     })
 }
 
-#[allow(nonstandard_style)]
 fn derive_enum(input: &DeriveInput, enumeration: &DataEnum) -> Result<TokenStream> {
     use attr::EnumTaggingMode;
 
-    let c = frontend_crate();
+    let c = crate::frontend();
 
     let tagging_mode = EnumTaggingMode::from_attrs(&input.attrs)?;
 
@@ -408,7 +402,7 @@ fn derive_enum(input: &DeriveInput, enumeration: &DataEnum) -> Result<TokenStrea
 }
 
 fn derive_unit(input: &DeriveInput) -> Result<TokenStream> {
-    let c = frontend_crate();
+    let c = crate::frontend();
 
     let ident = &input.ident;
     let (intro_generics, fwd_generics, where_clause) = input.generics.split_for_impl();

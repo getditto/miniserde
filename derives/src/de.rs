@@ -24,6 +24,8 @@ pub fn derive(input: DeriveInput) -> Result<TokenStream> {
 }
 
 pub fn derive_struct(input: &DeriveInput, fields: &FieldsNamed) -> Result<TokenStream> {
+    let c = crate::frontend();
+
     let ident = &input.ident;
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
     let dummy = Ident::new(
@@ -41,14 +43,14 @@ pub fn derive_struct(input: &DeriveInput, fields: &FieldsNamed) -> Result<TokenS
 
     let wrapper_generics = bound::with_lifetime_bound(&input.generics, "'__a");
     let (wrapper_impl_generics, wrapper_ty_generics, _) = wrapper_generics.split_for_impl();
-    let bound = parse_quote!(miniserde_ditto::Deserialize);
+    let bound = parse_quote!(#c::Deserialize);
     let bounded_where_clause = bound::where_clause_with_bound(&input.generics, bound);
 
     let mb_deserialize_null = if fields.named.is_empty() {
         Some(quote!(
-            fn null(&mut self) -> miniserde_ditto::Result<()> {
-                self.out = miniserde_ditto::__private::Some(#ident {});
-                miniserde_ditto::Result::Ok(())
+            fn null(&mut self) -> #c::Result<()> {
+                self.out = #c::__::Some(#ident {});
+                #c::Result::Ok(())
             }
         ))
     } else {
@@ -60,28 +62,28 @@ pub fn derive_struct(input: &DeriveInput, fields: &FieldsNamed) -> Result<TokenS
         const #dummy: () = {
             #[repr(C)]
             struct __Visitor #impl_generics #where_clause {
-                __out: miniserde_ditto::__private::Option<#ident #ty_generics>,
+                __out: #c::__::Option<#ident #ty_generics>,
             }
 
-            impl #impl_generics miniserde_ditto::Deserialize for #ident #ty_generics #bounded_where_clause {
-                fn begin(__out: &mut miniserde_ditto::__private::Option<Self>) -> &mut dyn miniserde_ditto::de::Visitor {
+            impl #impl_generics #c::Deserialize for #ident #ty_generics #bounded_where_clause {
+                fn begin(__out: &'_ mut #c::__::Option<Self>) -> &'_ mut dyn #c::de::Visitor {
                     unsafe {
                         &mut *{
                             __out
-                            as *mut miniserde_ditto::__private::Option<Self>
+                            as *mut #c::__::Option<Self>
                             as *mut __Visitor #ty_generics
                         }
                     }
                 }
             }
 
-            impl #impl_generics miniserde_ditto::de::Visitor for __Visitor #ty_generics #bounded_where_clause {
+            impl #impl_generics #c::de::Visitor for __Visitor #ty_generics #bounded_where_clause {
                 #mb_deserialize_null
 
-                fn map(&mut self) -> miniserde_ditto::Result<miniserde_ditto::__private::Box<dyn miniserde_ditto::de::Map + '_>> {
-                    miniserde_ditto::__private::Ok(miniserde_ditto::__private::Box::new(__State {
+                fn map(&mut self) -> #c::Result<#c::__::Box<dyn #c::de::Map + '_>> {
+                    #c::__::Ok(#c::__::Box::new(__State {
                         #(
-                            #fieldname: miniserde_ditto::Deserialize::default(),
+                            #fieldname: #c::Deserialize::default(),
                         )*
                         __out: &mut self.__out,
                     }))
@@ -90,31 +92,31 @@ pub fn derive_struct(input: &DeriveInput, fields: &FieldsNamed) -> Result<TokenS
 
             struct __State #wrapper_impl_generics #where_clause {
                 #(
-                    #fieldname: miniserde_ditto::__private::Option<#fieldty>,
+                    #fieldname: #c::__::Option<#fieldty>,
                 )*
-                __out: &'__a mut miniserde_ditto::__private::Option<#ident #ty_generics>,
+                __out: &'__a mut #c::__::Option<#ident #ty_generics>,
             }
 
-            impl #wrapper_impl_generics miniserde_ditto::de::StrKeyMap for __State #wrapper_ty_generics #bounded_where_clause {
-                fn key(&mut self, __k: &miniserde_ditto::__private::str) -> miniserde_ditto::Result<&mut dyn miniserde_ditto::de::Visitor> {
+            impl #wrapper_impl_generics #c::de::StrKeyMap for __State #wrapper_ty_generics #bounded_where_clause {
+                fn key(&mut self, __k: &#c::__::str) -> #c::Result<&mut dyn #c::de::Visitor> {
                     match __k {
                         #(
-                            #fieldstr => miniserde_ditto::__private::Ok(miniserde_ditto::Deserialize::begin(&mut self.#fieldname)),
+                            #fieldstr => #c::__::Ok(#c::Deserialize::begin(&mut self.#fieldname)),
                         )*
-                        _ => miniserde_ditto::__private::Ok(miniserde_ditto::de::Visitor::ignore()),
+                        _ => #c::__::Ok(#c::de::Visitor::ignore()),
                     }
                 }
 
-                fn finish(self: miniserde_ditto::__private::Box<Self>) -> miniserde_ditto::Result<()> {
+                fn finish(self: #c::__::Box<Self>) -> #c::Result<()> {
                     #(
-                        let #fieldname = self.#fieldname.ok_or(miniserde_ditto::Error)?;
+                        let #fieldname = self.#fieldname.ok_or(#c::Error)?;
                     )*
-                    *self.__out = miniserde_ditto::__private::Some(#ident {
+                    *self.__out = #c::__::Some(#ident {
                         #(
                             #fieldname,
                         )*
                     });
-                    miniserde_ditto::__private::Ok(())
+                    #c::__::Ok(())
                 }
             }
         };
@@ -122,66 +124,92 @@ pub fn derive_struct(input: &DeriveInput, fields: &FieldsNamed) -> Result<TokenS
 }
 
 pub fn derive_enum(input: &DeriveInput, enumeration: &DataEnum) -> Result<TokenStream> {
-    if input.generics.lt_token.is_some() || input.generics.where_clause.is_some() {
-        return Err(Error::new(
-            Span::call_site(),
-            "Enums with generics are not supported",
-        ));
-    }
+    let c = crate::frontend();
 
-    let ident = &input.ident;
+    let (intro_generics, fwd_generics, _) = input.generics.split_for_impl();
+    let bound = parse_quote!(#c::Deserialize);
+    let where_clause = bound::where_clause_with_bound(&input.generics, bound);
+
+    let Enum = &input.ident;
     let dummy = Ident::new(
-        &format!("_IMPL_DESERIALIZE_FOR_{}", ident),
+        &format!("_IMPL_DESERIALIZE_FOR_{}", Enum),
         Span::call_site(),
     );
 
-    let each_var_ident = enumeration
+    let is_trivial_enum = enumeration
         .variants
         .iter()
-        .map(|variant| match variant.fields {
-            Fields::Unit => Ok(&variant.ident),
-            _ => Err(Error::new_spanned(
-                variant,
-                "Invalid variant: only simple enum variants without fields are supported",
-            )),
-        })
-        .collect::<Result<Vec<_>>>()?;
-    let each_name = enumeration
-        .variants
-        .iter()
-        .map(attr::name_of_variant)
-        .collect::<Result<Vec<_>>>()?;
+        .all(|variant| matches!(variant.fields, Fields::Unit));
+    let ret = if is_trivial_enum {
+        let each_var_ident = enumeration
+            .variants
+            .iter()
+            .map(|variant| match variant.fields {
+                Fields::Unit => Ok(&variant.ident),
+                _ => Err(Error::new_spanned(
+                    variant,
+                    "Invalid variant: only simple enum variants without fields are supported",
+                )),
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let each_name = enumeration
+            .variants
+            .iter()
+            .map(attr::name_of_variant)
+            .collect::<Result<Vec<_>>>()?;
 
-    Ok(quote! {
-        #[allow(non_upper_case_globals)]
-        const #dummy: () = {
+        quote!(
             #[repr(C)]
-            struct __Visitor {
-                __out: miniserde_ditto::__private::Option<#ident>,
+            struct __Visitor #intro_generics
+            #where_clause
+            {
+                __out: #c::__::Option<#Enum #fwd_generics>,
             }
 
-            impl miniserde_ditto::Deserialize for #ident {
-                fn begin(__out: &mut miniserde_ditto::__private::Option<Self>) -> &mut dyn miniserde_ditto::de::Visitor {
+            impl #intro_generics
+                #c::Deserialize
+            for
+                #Enum #fwd_generics
+            #where_clause
+            {
+                fn begin (__out: &'_ mut #c::__::Option<Self>)
+                  -> &'_ mut dyn #c::de::Visitor
+                {
                     unsafe {
                         &mut *{
                             __out
-                            as *mut miniserde_ditto::__private::Option<Self>
-                            as *mut __Visitor
+                            as *mut #c::__::Option<Self>
+                            as *mut __Visitor #fwd_generics
                         }
                     }
                 }
             }
 
-            impl miniserde_ditto::de::Visitor for __Visitor {
-                fn string(&mut self, s: &miniserde_ditto::__private::str) -> miniserde_ditto::Result<()> {
+            impl #intro_generics
+                #c::de::Visitor
+            for
+                __Visitor #fwd_generics
+            {
+                fn string (self: &'_ mut Self, s: &'_ #c::__::str)
+                  -> #c::Result<()>
+                {
                     let value = match s {
-                        #( #each_name => #ident::#each_var_ident, )*
-                        _ => { return miniserde_ditto::__private::Err(miniserde_ditto::Error) },
+                        #( #each_name => #Enum::#each_var_ident, )*
+                        _ => { return #c::__::Err(#c::Error) },
                     };
-                    self.__out = miniserde_ditto::__private::Some(value);
-                    miniserde_ditto::__private::Ok(())
+                    self.__out = #c::__::Some(value);
+                    #c::__::Ok(())
                 }
             }
+        )
+    } else {
+        todo!()
+    };
+
+    Ok(quote!(
+        #[allow(non_upper_case_globals, nonstandard_style, unused_variables)]
+        const #dummy: () = {
+            #ret
         };
-    })
+    ))
 }
