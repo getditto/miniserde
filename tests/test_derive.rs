@@ -59,7 +59,7 @@ mod complex_enums {
 
     #[test]
     fn externally_tagged() {
-        #[derive(Debug, Serialize)]
+        #[derive(Debug, PartialEq, Deserialize, Serialize)]
         enum Message<T> {
             #[serde(rename = "Request")]
             Rekwest {
@@ -71,6 +71,7 @@ mod complex_enums {
                 id: T,
             },
         }
+
         assert_eq!(
             json::to_string(&Message::Rekwest {
                 identifier: 42,
@@ -79,16 +80,26 @@ mod complex_enums {
             .unwrap(),
             r#"{"Request":{"id":42,"method":"foo"}}"#,
         );
+
+        #[cfg(not(miri))]
+        assert_eq!(
+            json::from_str::<Message<i32>>(r#"{"Request":{"id":42,"method":"foo"}}"#).unwrap(),
+            Message::Rekwest {
+                identifier: 42,
+                method: String::from("foo"),
+            }
+        );
     }
 
     #[test]
     fn internally_tagged_no_content() {
-        #[derive(Debug, Serialize)]
+        #[derive(Debug, /* Deserialize, */ Serialize)]
         #[serde(tag = "kind")]
         enum Message<T> {
             Request { id: T, method: String },
             _Response { id: T },
         }
+
         assert_eq!(
             json::to_string(&Message::Request {
                 id: 42,
@@ -97,16 +108,26 @@ mod complex_enums {
             .unwrap(),
             r#"{"kind":"Request","id":42,"method":"foo"}"#,
         );
+
+        // #[cfg(not(miri))]
+        // assert_eq!(
+        //     json::from_str::<Message<i32>>(r#"{"kind":"Request","id":42,"method":"foo"}"#).unwrap(),
+        //     Message::Request {
+        //         id: 42,
+        //         method: String::from("foo"),
+        //     }
+        // );
     }
 
     #[test]
     fn untagged() {
-        #[derive(Debug, Serialize)]
+        #[derive(Debug, /* Deserialize, */ Serialize)]
         #[serde(untagged)]
         enum Message<T> {
             Request { id: T, method: String },
             _Response { id: T },
         }
+
         assert_eq!(
             json::to_string(&Message::Request {
                 id: 42,
@@ -115,24 +136,38 @@ mod complex_enums {
             .unwrap(),
             r#"{"id":42,"method":"foo"}"#,
         );
+
+        // #[cfg(not(miri))]
+        // assert_eq!(
+        //     json::from_str::<Message<i32>>(r#"{"id":42,"method":"foo"}"#).unwrap(),
+        //     Message::Request {
+        //         id: 42,
+        //         method: String::from("foo"),
+        //     }
+        // );
     }
 
     mod new_types {
         use super::*;
 
-        #[derive(Debug, Serialize)]
+        #[derive(Debug, PartialEq, Deserialize, Serialize)]
         struct Request<T> {
             id: T,
             method: String,
         }
+        #[derive(Debug, PartialEq, Deserialize, Serialize)]
+        struct _Response {
+            id: i32,
+        }
 
         #[test]
         fn externally_tagged() {
-            #[derive(Debug, Serialize)]
+            #[derive(Debug, PartialEq, Deserialize, Serialize)]
             enum Message<T> {
                 Request(Request<T>),
-                _Response { id: T },
+                _Response(_Response),
             }
+
             assert_eq!(
                 json::to_string(&Message::Request(Request {
                     id: 42,
@@ -141,16 +176,26 @@ mod complex_enums {
                 .unwrap(),
                 r#"{"Request":{"id":42,"method":"foo"}}"#,
             );
+
+            #[cfg(not(miri))]
+            assert_eq!(
+                json::from_str::<Message<i32>>(r#"{"Request":{"id":42,"method":"foo"}}"#).unwrap(),
+                Message::Request(Request {
+                    id: 42,
+                    method: String::from("foo"),
+                })
+            );
         }
 
         #[test]
         fn internally_tagged_no_content() {
-            #[derive(Debug, Serialize)]
+            #[derive(Debug, /* Deserialize, */ Serialize)]
             #[serde(tag = "kind")]
             enum Message<T> {
                 Request(Request<T>),
-                _Response { id: T },
+                _Response(_Response),
             }
+
             assert_eq!(
                 json::to_string(&Message::Request(Request {
                     id: 42,
@@ -159,16 +204,26 @@ mod complex_enums {
                 .unwrap(),
                 r#"{"kind":"Request","id":42,"method":"foo"}"#,
             );
+
+            // #[cfg(not(miri))]
+            // assert_eq!(
+            //     json::from_str::<Message<i32>>(r#"{"kind":"Request","id":42,"method":"foo"}"#).unwrap(),
+            //     Message::Request(Request {
+            //         id: 42,
+            //         method: String::from("foo"),
+            //     })
+            // );
         }
 
         #[test]
         fn untagged() {
-            #[derive(Debug, Serialize)]
+            #[derive(Debug, /* Deserialize, */ Serialize)]
             #[serde(untagged)]
             enum Message<T> {
                 Request(Request<T>),
-                _Response { id: T },
+                _Response(_Response),
             }
+
             assert_eq!(
                 json::to_string(&Message::Request(Request {
                     id: 42,
@@ -177,6 +232,15 @@ mod complex_enums {
                 .unwrap(),
                 r#"{"id":42,"method":"foo"}"#,
             );
+
+            // #[cfg(not(miri))]
+            // assert_eq!(
+            //     json::from_str::<Message<i32>>(r#"{"id":42,"method":"foo"}"#).unwrap(),
+            //     Message::Request(Request {
+            //         id: 42,
+            //         method: String::from("foo"),
+            //     })
+            // );
         }
     }
 }

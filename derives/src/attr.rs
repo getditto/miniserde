@@ -5,7 +5,7 @@ use ::syn::{spanned::Spanned, Result, *};
 fn attr_rename(attrs: &[Attribute]) -> Result<Option<String>> {
     let mut ret = None;
 
-    for_each_serde_attr! { attrs =>
+    for_each_serde_attr!( attrs =>
         #[serde( rename = $new_name )] => {
             let prev = ret.replace(new_name);
             if prev.is_some() {
@@ -18,10 +18,39 @@ fn attr_rename(attrs: &[Attribute]) -> Result<Option<String>> {
             // the "sequence of u8s" case, so no need for `serde_bytes`.
             // Thus, nothing to do.
         },
-    }
+
+        #[serde(other)] => {
+            // This is sometimes correct; ignore it since it will be correctly
+            // handled somewhere else. FIXME: do this better.
+        },
+
+        #[serde(skip)] => {
+
+        },
+    )?;
 
     Ok(ret)
 }
+
+pub fn has_skip_deserializing(attrs: &[Attribute]) -> bool {
+    let mut ret = false;
+    let _ = for_each_serde_attr! { attrs =>
+        #[serde(skip_deserializing)] => ret = true,
+        #[serde(skip)] => ret = true,
+        _ => {},
+    };
+    ret
+}
+
+// pub fn has_skip_serializing(attrs: &[Attribute]) -> bool {
+//     let mut ret = false;
+//     let _ = for_each_serde_attr! { attrs =>
+//         #[serde(skip_serializing)] => ret = true,
+//         #[serde(skip)] => ret = true,
+//         _ => {},
+//     };
+//     ret
+// }
 
 /// Determine the name of a field, respecting a rename attribute.
 pub fn name_of_field(field: &Field) -> Result<String> {
@@ -35,6 +64,7 @@ pub fn name_of_variant(var: &Variant) -> Result<String> {
     Ok(rename.unwrap_or_else(|| var.ident.to_string()))
 }
 
+#[derive(Debug)] // FIXME: remove this.
 pub enum EnumTaggingMode {
     ExternallyTagged,
     InternallyTagged {
@@ -53,7 +83,7 @@ impl EnumTaggingMode {
         let mut ret = None;
         let mut last_content = None;
 
-        for_each_serde_attr! { attrs =>
+        for_each_serde_attr!( attrs =>
             #[serde( tag = $tag_name )] => {
                 let prev = ret.replace(EnumTaggingMode::InternallyTagged {
                     tag_name,
@@ -89,7 +119,7 @@ impl EnumTaggingMode {
                     ));
                 }
             },
-        }
+        )?;
 
         if let Some((_, span)) = last_content {
             Err(Error::new(span, "Extraneous `content` attribute"))
@@ -118,6 +148,7 @@ macro_rules! for_each_serde_attr {
                     if path.is_ident(stringify!($key))
                 => {
                     let $key = path;
+                    let _ = $key;
                     let $value = s.value();
                     return Some((|| Ok::<(), ::syn::Error>({
                         $body
@@ -168,9 +199,10 @@ macro_rules! for_each_serde_attr {
             match meta!() {
                 | Meta::Path(path) if path.is_ident(stringify!($key)) => {
                     let $key = path;
-                    return Some((|| Ok::<(), ::syn::Error>({
+                    let _ = $key;
+                    return Some((|| Ok::<(), ::syn::Error>(
                         $body
-                    }))());
+                    ))());
                 },
                 | _ => {},
             }
@@ -180,7 +212,20 @@ macro_rules! for_each_serde_attr {
 
     (
         @[acc = $($acc:tt)*]
-        // _ => $last_branch:expr $(,)?
+        _ $(if $guard:expr)? => $last_branch:expr $(,
+        $($rest:tt)* )?
+    ) => (for_each_serde_attr! {
+        @[acc = $($acc)*
+            if true $(&& $guard)? {
+                return Some((|| Ok::<(), ::syn::Error>( $last_branch ))());
+            }
+        ]
+        $($($rest)*)?
+    });
+
+    (
+        @[acc = $($acc:tt)*]
+        /* Nothing left: default branch -> error */
     ) => ({
         $($acc)*
 
@@ -190,15 +235,15 @@ macro_rules! for_each_serde_attr {
     (
         $attrs:expr =>
         $($input:tt)*
-    ) => ({
+    ) => (
         try_for_each_serde_attr($attrs, |meta| {
             macro_rules! meta {() => ( meta )}
             for_each_serde_attr! {
                 @[acc = ]
                 $($input)*
             }
-        })?;
-    });
+        })
+    );
 }
 use for_each_serde_attr;
 
