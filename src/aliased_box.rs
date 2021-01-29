@@ -6,13 +6,12 @@ pub struct AliasedBox<T: ?Sized>(ptr::NonNull<T>);
 
 impl<T: ?Sized> From<Box<T>> for AliasedBox<T> {
     fn from(p: Box<T>) -> AliasedBox<T> {
-        impl<T: ?Sized> Drop for AliasedBox<T> {
-            fn drop(self: &'_ mut Self) {
-                unsafe { drop::<Box<T>>(Box::from_raw(self.0.as_ptr())) }
-            }
-        }
-
         Self(Box::leak(p).into())
+    }
+}
+impl<T: ?Sized> Drop for AliasedBox<T> {
+    fn drop(self: &'_ mut Self) {
+        unsafe { drop::<Box<T>>(Box::from_raw(self.0.as_ptr())) }
     }
 }
 
