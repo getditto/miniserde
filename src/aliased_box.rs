@@ -9,6 +9,13 @@ impl<T: ?Sized> From<Box<T>> for AliasedBox<T> {
         Self(Box::leak(p).into())
     }
 }
+
+impl<T> AliasedBox<T> {
+    pub fn new(value: T) -> AliasedBox<T> {
+        Self::from(Box::new(value))
+    }
+}
+
 impl<T: ?Sized> Drop for AliasedBox<T> {
     fn drop(self: &'_ mut Self) {
         unsafe { drop::<Box<T>>(Box::from_raw(self.0.as_ptr())) }
@@ -16,7 +23,7 @@ impl<T: ?Sized> Drop for AliasedBox<T> {
 }
 
 impl<T: ?Sized> AliasedBox<T> {
-    pub unsafe fn ptr(self: &'_ AliasedBox<T>) -> *mut T {
+    pub fn ptr(self: &'_ AliasedBox<T>) -> *mut T {
         self.0.as_ptr()
     }
 
