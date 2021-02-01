@@ -42,15 +42,15 @@ pub fn has_skip_deserializing(attrs: &[Attribute]) -> bool {
     ret
 }
 
-// pub fn has_skip_serializing(attrs: &[Attribute]) -> bool {
-//     let mut ret = false;
-//     let _ = for_each_serde_attr! { attrs =>
-//         #[serde(skip_serializing)] => ret = true,
-//         #[serde(skip)] => ret = true,
-//         _ => {},
-//     };
-//     ret
-// }
+pub fn has_skip_serializing(attrs: &[Attribute]) -> bool {
+    let mut ret = false;
+    let _ = for_each_serde_attr! { attrs =>
+        #[serde(skip_serializing)] => ret = true,
+        #[serde(skip)] => ret = true,
+        _ => {},
+    };
+    ret
+}
 
 /// Determine the name of a field, respecting a rename attribute.
 pub fn name_of_field(field: &Field) -> Result<String> {

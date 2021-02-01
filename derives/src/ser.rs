@@ -1,7 +1,9 @@
-use crate::{attr, bound};
+use ::core::ops::Not as _;
 use ::proc_macro2::{Span, TokenStream};
 use ::quote::{format_ident, quote};
 use ::syn::{spanned::Spanned, Result, *};
+
+use crate::{attr, bound};
 
 pub fn derive(input: DeriveInput) -> Result<TokenStream> {
     match &input.data {
@@ -27,10 +29,15 @@ fn derive_struct(input: &DeriveInput, fields: &FieldsNamed) -> Result<TokenStrea
     let ident = &input.ident;
     let dummy = Ident::new(&format!("_IMPL_SERIALIZE_FOR_{}", ident), Span::call_site());
 
-    let each_fieldname = &fields.named.iter().map(|f| &f.ident).collect::<Vec<_>>();
-    let each_fieldstr = fields
+    let fields_named = fields
         .named
         .iter()
+        .filter(|f| attr::has_skip_serializing(&f.attrs).not())
+        .collect::<Vec<_>>();
+    let fields_named = || fields_named.iter().copied();
+
+    let each_fieldname = &fields_named().map(|f| &f.ident).collect::<Vec<_>>();
+    let each_fieldstr = fields_named()
         .map(attr::name_of_field)
         .collect::<Result<Vec<_>>>()?;
     let each_idx = 0usize..;
@@ -39,7 +46,7 @@ fn derive_struct(input: &DeriveInput, fields: &FieldsNamed) -> Result<TokenStrea
     let (impl_generics, ty_generics, _) = input.generics.split_for_impl();
     let bounded_where_clause = bound::where_clause_with_bound(&input.generics, bound);
 
-    let n = fields.named.len();
+    let n = fields_named().len();
     Ok(quote! {
         #[allow(non_upper_case_globals)]
         const #dummy: () = {
@@ -75,19 +82,20 @@ fn derive_enum(input: &DeriveInput, enumeration: &DataEnum) -> Result<TokenStrea
     let where_clause = bound::where_clause_with_bound(&input.generics, bound);
     let dummy = Ident::new(&format!("_IMPL_SERIALIZE_FOR_{}", Enum), Span::call_site());
 
-    let is_trivial_enum = enumeration
+    let enumeration_variants = enumeration
         .variants
         .iter()
-        .all(|variant| matches!(variant.fields, Fields::Unit));
+        .filter(|v| attr::has_skip_serializing(&v.attrs).not())
+        .collect::<Vec<_>>();
+    let enumeration_variants = || enumeration_variants.iter().copied();
+
+    let is_trivial_enum =
+        enumeration_variants().all(|variant| matches!(variant.fields, Fields::Unit));
     let view_body = if is_trivial_enum {
-        let each_var_ident = enumeration
-            .variants
-            .iter()
+        let each_var_ident = enumeration_variants()
             .map(|it| &it.ident)
             .collect::<Vec<_>>();
-        let each_name = enumeration
-            .variants
-            .iter()
+        let each_name = enumeration_variants()
             .map(attr::name_of_variant)
             .collect::<Result<Vec<_>>>()?;
 
@@ -98,11 +106,14 @@ fn derive_enum(input: &DeriveInput, enumeration: &DataEnum) -> Result<TokenStrea
                         #c::ser::ValueView::Str(#c::__::Cow::Borrowed(#each_name))
                     }
                 )*
+                _ => #c::__::std::panic!(
+                    "Attempted to serialize a `#[serde(skip)]`-ed variant",
+                ),
             }
         )
     } else {
         // Non-trivial enum case:
-        let match_arms = enumeration.variants.iter().map(|variant| Ok({
+        let match_arms = enumeration_variants().map(|variant| Ok({
             let Variant = &variant.ident;
             let Variant_str = attr::name_of_variant(variant)?;
             let mut each_binding_str = vec![];
@@ -378,7 +389,13 @@ fn derive_enum(input: &DeriveInput, enumeration: &DataEnum) -> Result<TokenStrea
         quote!(
             /// FIXME: do this in a more performant fashion
             extern {}
-            match self { #(#match_arms)* }
+            match self {
+                #(#match_arms)*
+
+                _ => #c::__::std::panic!(
+                    "Attempted to serialize a `#[serde(skip)]`-ed variant",
+                ),
+            }
         )
     };
     Ok(quote!(
