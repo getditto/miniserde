@@ -166,16 +166,26 @@
 #![deny(rust_2018_idioms)]
 #![allow(explicit_outlives_requirements)]
 
-macro_rules! err {(
+extern crate self as miniserde_ditto;
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __err__ {(
     $($args:tt)*
 ) => ({
     if ::core::option_env!("MINISERDE_DEBUG_ERRORS") == Some("1") {
         ::std::eprintln!("Serde error: {}", ::core::format_args!($($args)*));
     }
-    return crate::ResultLike::ERROR;
+    return $crate::ResultLike::ERROR;
 })}
+macro_rules! err {(
+    $($args:tt)*
+) => (
+    $crate::__::err! { $($args)* }
+)}
 
-trait ResultLike {
+#[doc(hidden)]
+pub trait ResultLike {
     const ERROR: Self;
 }
 impl<T> ResultLike for Result<T> {

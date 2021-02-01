@@ -283,8 +283,135 @@ pub fn derive_enum(input: &DeriveInput, enumeration: &DataEnum) -> Result<TokenS
                             #EachVariant : #c::__::None,
                         )*
                     };
+
                     map
                 ),
+
+                EnumTaggingMode::InternallyTagged {
+                    tag_name,
+                    content_name: None,
+                } => quote!(
+
+                    enum __Helper_CurrentVariant #intro_generics
+                    #where_clause
+                    {
+                        __serde_None,
+                        #(
+                            #EachVariant(#c::__::Option<#EachVariantTy>),
+                        )*
+                    }
+
+                    struct __Map #intro_generics_map
+                    #where_clause
+                    {
+                        out: &'__serde_de_map mut #c::__::Option<
+                            #Enum #fwd_generics,
+                        >,
+                        map_visitor: #c::__::AliasedBox<
+                            #c::__::Option<#c::__::Box<dyn #c::de::Map + '__serde_de_map>>
+                        >,
+                        tag_visitor_slot: #c::__::Option<#c::__::AliasedBox<dyn #c::de::Visitor + '__serde_de_map>>,
+                        current_variant_holder: #c::__::AliasedBox<
+                            __Helper_CurrentVariant #fwd_generics
+                        >,
+                    }
+
+                    impl #intro_generics_map
+                        #c::de::StrKeyMap
+                    for
+                        __Map #fwd_generics_map
+                    #where_clause
+                    {
+                        fn key (
+                            self: &'_ mut Self,
+                            key: &'_ str,
+                        ) -> #c::Result<&'_ mut dyn #c::de::Visitor>
+                        {
+                            let map_visitor = unsafe { &mut *self.map_visitor.ptr() };
+                            match *map_visitor {
+                                #c::__::Some(ref mut dyn_map) => {
+                                    dyn_map.val_with_key(&mut |it| it.and_then(|visit| visit.string(key)))
+                                },
+                                #c::__::None if key == #tag_name => {
+                                    let map_visitor = self.map_visitor.ptr();
+                                    let current_variant_holder = self.current_variant_holder.ptr();
+                                    let visitor = #c::__::StrVisitor(move |s: &#c::__::str| #c::Result::Ok({
+                                        let map_visitor = unsafe { &mut *map_visitor };
+                                        if map_visitor.is_some() {
+                                            #c::__::err!("Attempted to feed a string twice to the value of the `.{}` field: {:?}", #tag_name, s);
+                                        }
+                                        *map_visitor = #c::__::Some(match s {
+                                        #(
+                                            #EachVariant_str => {
+                                                let current_variant_holder = unsafe { &mut *current_variant_holder };
+                                                *current_variant_holder = __Helper_CurrentVariant::#EachVariant(#c::__::None);
+                                                let out: &mut #c::__::Option<_> = match *current_variant_holder {
+                                                    __Helper_CurrentVariant::#EachVariant(ref mut out @ None) => out,
+                                                    _ => #c::__::std::unreachable!(),
+                                                };
+                                                #c::Deserialize::begin(out)
+                                                    .map()?
+                                            },
+                                        )*
+                                            _ => #c::__::err!(
+                                                "Got a tag that matches not variant: {:?}", s,
+                                            ),
+                                        });
+                                    }));
+
+                                    self.tag_visitor_slot.replace(
+                                        #c::__::AliasedBox::from(#c::__::Box::new(
+                                            visitor
+                                        ) as #c::__::Box<dyn #c::de::Visitor + '__serde_de_map>)
+                                    );
+
+                                    let ptr = self.tag_visitor_slot.as_mut().unwrap().ptr();
+                                    #c::Result::Ok(unsafe { &mut *ptr })
+                                },
+                                None /* if key != name */ => #c::__::err!(
+                                    // FIXME: the current trait design does not allow backtracking
+                                    "Unimplemented: non-tagging key encountered first: {:?}",
+                                    key,
+                                ),
+                            }
+                        }
+
+                        fn finish (self: #c::__::Box<Self>)
+                          -> #c::Result<()>
+                        {
+                            if let Some(visitor) = *self.map_visitor.assume_unique() {
+                                #c::de::Map::finish(visitor)?;
+                            }
+                            match *self.current_variant_holder.assume_unique() {
+                            #(
+                                __Helper_CurrentVariant::#EachVariant(#c::__::Some(variant)) => {
+                                    let prev = self.out.replace(
+                                        #Enum::#EachVariant(variant)
+                                    );
+                                    #c::__::std::debug_assert!(prev.is_none());
+                                },
+                                __Helper_CurrentVariant::#EachVariant(#c::__::None) => #c::__::err!(
+                                    "Deserialization of `{}` did not complete", #EachVariant_str,
+                                ),
+                            )*
+                                __Helper_CurrentVariant::__serde_None => #c::__::err!(
+                                    "Missing keys when deserializing `{}`", #c::__::stringify!(#Enum),
+                                ),
+                            }
+                            #c::Result::Ok(())
+                        }
+                    }
+
+                    let map: __Map #fwd_generics_map = __Map {
+                        out: &mut self.out,
+                        map_visitor: #c::__::AliasedBox::new(None),
+                        tag_visitor_slot: None,
+                        current_variant_holder: #c::__::AliasedBox::new(__Helper_CurrentVariant::__serde_None),
+                    };
+
+                    map
+                ),
+
                 _ => todo!("{:?}", tagging_mode),
             }
         } else {
@@ -380,7 +507,7 @@ pub fn derive_enum(input: &DeriveInput, enumeration: &DataEnum) -> Result<TokenS
 
                     Fields::Unit | Fields::Unnamed(_) => {
                         impl_into_branches.push(quote!(
-                            #__Helper_Enum::#Variant {} => #Enum::#Variant {}
+                            #__Helper_Enum::#Variant(#c::__::Empty) => #Enum::#Variant {}
                         ));
                         parse_quote!((
                             #c::__::Empty,

@@ -70,6 +70,8 @@ mod complex_enums {
             _Response {
                 id: T,
             },
+            _Empty,
+            _Empty2 {},
         }
 
         assert_eq!(
@@ -93,11 +95,13 @@ mod complex_enums {
 
     #[test]
     fn internally_tagged_no_content() {
-        #[derive(Debug, /* Deserialize, */ Serialize)]
+        #[derive(Debug, PartialEq, Deserialize, Serialize)]
         #[serde(tag = "kind")]
         enum Message<T> {
             Request { id: T, method: String },
             _Response { id: T },
+            _Empty,
+            _Empty2 {},
         }
 
         assert_eq!(
@@ -109,14 +113,14 @@ mod complex_enums {
             r#"{"kind":"Request","id":42,"method":"foo"}"#,
         );
 
-        // #[cfg(not(miri))]
-        // assert_eq!(
-        //     json::from_str::<Message<i32>>(r#"{"kind":"Request","id":42,"method":"foo"}"#).unwrap(),
-        //     Message::Request {
-        //         id: 42,
-        //         method: String::from("foo"),
-        //     }
-        // );
+        #[cfg(not(miri))]
+        assert_eq!(
+            json::from_str::<Message<i32>>(r#"{"kind":"Request","id":42,"method":"foo"}"#).unwrap(),
+            Message::Request {
+                id: 42,
+                method: String::from("foo"),
+            }
+        );
     }
 
     #[test]
@@ -126,6 +130,8 @@ mod complex_enums {
         enum Message<T> {
             Request { id: T, method: String },
             _Response { id: T },
+            _Empty,
+            _Empty2 {},
         }
 
         assert_eq!(
@@ -189,7 +195,7 @@ mod complex_enums {
 
         #[test]
         fn internally_tagged_no_content() {
-            #[derive(Debug, /* Deserialize, */ Serialize)]
+            #[derive(Debug, PartialEq, Deserialize, Serialize)]
             #[serde(tag = "kind")]
             enum Message<T> {
                 Request(Request<T>),
@@ -205,14 +211,15 @@ mod complex_enums {
                 r#"{"kind":"Request","id":42,"method":"foo"}"#,
             );
 
-            // #[cfg(not(miri))]
-            // assert_eq!(
-            //     json::from_str::<Message<i32>>(r#"{"kind":"Request","id":42,"method":"foo"}"#).unwrap(),
-            //     Message::Request(Request {
-            //         id: 42,
-            //         method: String::from("foo"),
-            //     })
-            // );
+            #[cfg(not(miri))]
+            assert_eq!(
+                json::from_str::<Message<i32>>(r#"{"kind":"Request","id":42,"method":"foo"}"#)
+                    .unwrap(),
+                Message::Request(Request {
+                    id: 42,
+                    method: String::from("foo"),
+                })
+            );
         }
 
         #[test]
