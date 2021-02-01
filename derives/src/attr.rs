@@ -19,14 +19,15 @@ fn attr_rename(attrs: &[Attribute]) -> Result<Option<String>> {
             // Thus, nothing to do.
         },
 
-        #[serde(other)] => {
-            // This is sometimes correct; ignore it since it will be correctly
-            // handled somewhere else. FIXME: do this better.
-        },
+        // TODO
+        // #[serde(other)] => {
+        //     // This is sometimes correct; ignore it since it will be correctly
+        //     // handled somewhere else. FIXME: do this better.
+        // },
 
-        #[serde(skip)] => {
-
-        },
+        #[serde(skip)] => {},
+        #[serde(skip_deserializing)] => {},
+        #[serde(skip_serializing)] => {},
     )?;
 
     Ok(ret)
