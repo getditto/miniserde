@@ -56,3 +56,6 @@ pub enum NonExhaustive<T> {
     #[serde(skip_serializing)]
     Unknown(serde::de::IgnoredAny),
 }
+
+#[derive(Deserialize, Serialize)]
+struct TupleStruct(u8, String);

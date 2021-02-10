@@ -10,11 +10,19 @@ pub fn derive(input: DeriveInput) -> Result<TokenStream> {
         Data::Struct(DataStruct {
             fields: Fields::Named(fields),
             ..
-        }) => derive_struct(&input, fields),
+        }) => derive_struct_named(&input, fields),
         Data::Struct(DataStruct {
             fields: Fields::Unit,
             ..
-        }) => derive_struct(&input, &parse_quote!({})),
+        }) => derive_struct_named(&input, &parse_quote!({})),
+        Data::Struct(DataStruct {
+            fields: Fields::Unnamed(fields),
+            ..
+        }) if fields.unnamed.len() == 0 => derive_struct_named(&input, &parse_quote!({})),
+        Data::Struct(DataStruct {
+            fields: Fields::Unnamed(fields),
+            ..
+        }) => derive_struct_unnamed(&input, fields),
         Data::Enum(enumeration) => derive_enum(&input, enumeration),
         _ => Err(Error::new(
             Span::call_site(),
@@ -23,7 +31,7 @@ pub fn derive(input: DeriveInput) -> Result<TokenStream> {
     }
 }
 
-pub fn derive_struct(input: &DeriveInput, fields: &FieldsNamed) -> Result<TokenStream> {
+pub fn derive_struct_named(input: &DeriveInput, fields: &FieldsNamed) -> Result<TokenStream> {
     let c = crate::frontend();
 
     let ident = &input.ident;
@@ -138,6 +146,143 @@ pub fn derive_struct(input: &DeriveInput, fields: &FieldsNamed) -> Result<TokenS
             }
         };
     })
+}
+
+pub fn derive_struct_unnamed(input: &DeriveInput, fields: &FieldsUnnamed) -> Result<TokenStream> {
+    let c = crate::frontend();
+
+    let ident = &input.ident;
+    let (impl_generics, ty_generics, _) = input.generics.split_for_impl();
+    let bound = parse_quote!(#c::Deserialize);
+    let bounded_where_clause = bound::where_clause_with_bound(&input.generics, bound);
+    let dummy = Ident::new(
+        &format!("_IMPL_DESERIALIZE_FOR_{}", ident),
+        Span::call_site(),
+    );
+
+    let skipped_fields = || {
+        fields
+            .unnamed
+            .iter()
+            .filter(|f| attr::has_skip_deserializing(&f.attrs))
+    };
+    if skipped_fields().next().is_some() {
+        return Err(Error::new(
+            Span::call_site(),
+            "`#[serde(skip)]` is not yet supported on tuple structs",
+        ));
+    }
+    let non_skipped_fields = fields
+        .unnamed
+        .iter()
+        .filter(|f| attr::has_skip_deserializing(&f.attrs).not())
+        .collect::<Vec<_>>();
+    let begin = match non_skipped_fields.len() {
+        0 => unreachable!(),
+
+        1 => {
+            let Inner = &non_skipped_fields[0].ty;
+            quote! (
+                <#Inner as #c::Deserialize>::begin(unsafe {
+                    // Safety: this is assuming same layout for `Option<Self>`
+                    // and `Option<Inner>`, which is true provided there are no
+                    // `#[serde(skip)]`-ed fields.
+                    #c::__::std::mem::transmute(out)
+                })
+            )
+        }
+
+        n => {
+            let wrapper_generics = bound::with_lifetime_bound(&input.generics, "'__a");
+            let (wrapper_impl_generics, wrapper_ty_generics, _) = wrapper_generics.split_for_impl();
+            let each_field = non_skipped_fields
+                .iter()
+                .enumerate()
+                .map(|(i, f)| ::quote::format_ident!("__{}", i, span = f.ty.span()))
+                .collect::<Vec<_>>();
+            let EachFieldTy = non_skipped_fields.iter().map(|f| &f.ty).collect::<Vec<_>>();
+
+            quote!(
+                struct __Visitor #impl_generics #bounded_where_clause {
+                    out: #c::__::Option<#ident #ty_generics>,
+                }
+
+                impl #impl_generics #c::de::Visitor for __Visitor #ty_generics #bounded_where_clause {
+                    fn seq(&mut self) -> #c::Result<#c::__::Box<dyn #c::de::Seq + '_>> {
+                        #c::__::Ok(#c::__::Box::new({
+                            struct __State #wrapper_impl_generics #bounded_where_clause {
+                                #(
+                                    #each_field: #c::__::Option<#EachFieldTy>,
+                                )*
+                                out: &'__a mut #c::__::Option< #ident #ty_generics >,
+                            }
+
+                            impl #wrapper_impl_generics #c::de::Seq
+                                for __State #wrapper_ty_generics
+                            #bounded_where_clause
+                            {
+                                fn element (self: &'_ mut Self)
+                                  -> #c::Result<&'_ mut dyn #c::de::Visitor>
+                                {
+                                    #c::Result::Ok(match *self {
+                                    #(
+                                        | Self {
+                                            #each_field: ref mut next_slot @ None,
+                                            ..
+                                        } => #c::Deserialize::begin(next_slot),
+                                    )*
+                                        | _ => #c::__::err!("Attempted to deserialize more than {} elements", #n),
+                                    })
+                                }
+
+                                fn finish (self: #c::__::Box<Self>)
+                                  -> #c::Result<()>
+                                {
+                                    if let Self {
+                                        #(
+                                            #each_field: Some(#each_field),
+                                        )*
+                                        out,
+                                    } = *self {
+                                        *out = #c::__::Some(#ident(
+                                            #( #each_field ),*
+                                        ));
+                                    } else {
+                                        #c::__::err!("Attempted to deserialize less than {} elements", #n);
+                                    }
+                                    #c::Result::Ok(())
+                                }
+                            }
+
+                            __State {
+                                #(
+                                    #each_field: #c::Deserialize::default(),
+                                )*
+                                out: &mut self.out,
+                            }
+                        }))
+                    }
+                }
+
+                unsafe {
+                    &mut *{
+                        out as *mut #c::__::Option<#ident #ty_generics>
+                            as *mut __Visitor #ty_generics
+                    }
+                }
+            )
+        }
+    };
+    Ok(quote!(
+        #[allow(non_upper_case_globals)]
+        const #dummy: () = {
+            impl #impl_generics #c::Deserialize for #ident #ty_generics #bounded_where_clause {
+                fn begin(out: &'_ mut #c::__::Option<Self>) -> &'_ mut dyn #c::de::Visitor {
+                    #begin
+                }
+            }
+        };
+    ))
 }
 
 pub fn derive_enum(input: &DeriveInput, enumeration: &DataEnum) -> Result<TokenStream> {

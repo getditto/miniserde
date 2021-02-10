@@ -40,7 +40,7 @@ fn main() -> miniserde_ditto::Result<()> {
         message: "reminiscent of Serde".to_owned(),
     };
 
-    let j = json::to_string(&example);
+    let j = json::to_string(&example)?;
     println!("{}", j);
 
     let out: Example = json::from_str(&j)?;
@@ -79,8 +79,8 @@ very little size in the executable.
 
 This crates shares, API-wise, the same "entry-points" as the `serde` ecosystem:
 
-  - ```rust
-    #[cfg(feature = "miniserde")] // feature-gating magic
+  - ```rust,ignore
+    #[cfg(feature = "miniserde")] // Optional: using feature-gating magic
     use miniserde_ditto::{
         self as serde,
         cbor as serde_cbor,
