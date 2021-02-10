@@ -156,9 +156,28 @@ deserialization logic through attributes. Or for the ultimate level of
 configurability you can handwrite arbitrarily complicated implementations of its
 traits.
 
-Miniserde provides just one attribute which is `rename`, and severely restricts
-the kinds of on-the-fly manipulation that are possible in custom impls. If you
-need any of this, use Serde -- it's a great library.
+#### List of supported attributes
+
+  - [x] `#[serde(rename)]` on variants and/or fields;
+
+  - [x] `#[serde(tag = "tag_name")]` or `#[serde(untagged")]` on enums;
+
+  - [x] `#[serde(skip{,_{,de}serializing})]` on fields;
+
+  - [x] `#[serde(with = "serde_bytes")]` currently ignored, since a clever
+    design of the library already allows to specialize on sequences of bytes.
+
+  - [x] `#[serde(default)]` for `Option` fields only, in which case it is
+    handled by default (attribute is ignored).
+
+      - [ ] Extend that to non-`Option` types.
+
+  - [ ] `#[serde(skip_serializing_if = "some_condition")]`
+    Is currently accepted, but ignored. So only use it as a (missed) optimization.
+
+  - [ ] Any other attribute.
+
+If you need anything else, use Serde – it's a great library.
 
 <br>
 
