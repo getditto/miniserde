@@ -10,11 +10,15 @@ pub fn derive(input: DeriveInput) -> Result<TokenStream> {
         Data::Struct(DataStruct {
             fields: Fields::Named(fields),
             ..
-        }) => derive_struct(&input, &fields),
+        }) => derive_struct_named(&input, &fields),
         Data::Struct(DataStruct {
             fields: Fields::Unit,
             ..
         }) => derive_unit(&input),
+        Data::Struct(DataStruct {
+            fields: Fields::Unnamed(fields),
+            ..
+        }) => derive_struct_unnamed(&input, fields),
         Data::Enum(enumeration) => derive_enum(&input, enumeration),
         _ => Err(Error::new(
             Span::call_site(),
@@ -23,7 +27,7 @@ pub fn derive(input: DeriveInput) -> Result<TokenStream> {
     }
 }
 
-fn derive_struct(input: &DeriveInput, fields: &FieldsNamed) -> Result<TokenStream> {
+fn derive_struct_named(input: &DeriveInput, fields: &FieldsNamed) -> Result<TokenStream> {
     let c = crate::frontend();
 
     let ident = &input.ident;
@@ -63,6 +67,68 @@ fn derive_struct(input: &DeriveInput, fields: &FieldsNamed) -> Result<TokenStrea
                             _ => #c::__::std::unreachable!(),
                         })
                     }))
+                }
+            }
+        };
+    })
+}
+
+fn derive_struct_unnamed(input: &DeriveInput, fields: &FieldsUnnamed) -> Result<TokenStream> {
+    let c = crate::frontend();
+
+    let ident = &input.ident;
+    let dummy = Ident::new(&format!("_IMPL_SERIALIZE_FOR_{}", ident), Span::call_site());
+
+    let fields_unnamed = (0..)
+        .zip(&fields.unnamed)
+        .filter(|&(_, f)| attr::has_skip_serializing(&f.attrs).not())
+        .map(|(index, f)| Index {
+            index,
+            span: f.ty.span(),
+        })
+        .collect::<Vec<_>>();
+
+    let bound = parse_quote!(#c::Serialize);
+    let (impl_generics, ty_generics, _) = input.generics.split_for_impl();
+    let bounded_where_clause = bound::where_clause_with_bound(&input.generics, bound);
+
+    let view = match fields_unnamed.len() {
+        0 => quote!(
+            #c::ser::ValueView::Null
+        ),
+        1 => {
+            let idx = &fields_unnamed[0];
+            quote!(
+                #c::Serialize::view(&self.#idx)
+            )
+        }
+        n => {
+            let each_idx = 0_usize..;
+            let each_field_dyn_serialize = fields_unnamed.iter().map(|idx| {
+                let span = idx.span;
+                ::quote::quote_spanned!(span=>
+                    &self.#idx as &dyn #c::Serialize
+                )
+            });
+            quote!(
+                #c::ser::ValueView::Seq(#c::__::Box::new({
+                    (0 .. #n).map(move |i| match i {
+                        #(
+                            #each_idx => #each_field_dyn_serialize,
+                        )*
+                        _ => #c::__::std::unreachable!(),
+                    })
+                }))
+            )
+        }
+    };
+
+    Ok(quote! {
+        #[allow(non_upper_case_globals)]
+        const #dummy: () = {
+            impl #impl_generics #c::Serialize for #ident #ty_generics #bounded_where_clause {
+                fn view(&self) -> #c::ser::ValueView<'_> {
+                    #view
                 }
             }
         };

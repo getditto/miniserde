@@ -28,6 +28,11 @@ fn attr_rename(attrs: &[Attribute]) -> Result<Option<String>> {
         #[serde(skip)] => {},
         #[serde(skip_deserializing)] => {},
         #[serde(skip_serializing)] => {},
+
+        #[serde(default)] => {},
+        #[serde(skip_serializing_if = $condition)] => {
+            let _ = condition;
+        },
     )?;
 
     Ok(ret)
